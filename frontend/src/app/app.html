@@ -1,31 +1,200 @@
-<div class="page">
+<div class="page" #pageTop>
   <header class="hero">
     <h1>Wa-Nalizer</h1>
-    <p>Analiza un historial de chat y obtén insights.</p>
+    <p>Gestiona áreas, personas y analiza conversaciones.</p>
   </header>
 
-  <section class="card">
-    <label class="drop" [class.filled]="fileName()">
-      <input type="file" accept=".txt,text/plain" (change)="onFile($event)" hidden />
-      <span class="drop-icon">📄</span>
-      <span class="drop-text">{{ fileName() || 'Selecciona el .txt del chat exportado' }}</span>
-    </label>
+  <nav class="breadcrumb">
+    @if (view() === 'areas') {
+      <span class="current">Áreas</span>
+    } @else {
+      <button (click)="goAreas()">Áreas</button>
+      @if (view() === 'people' || view() === 'chats') {
+        <span class="sep">›</span>
+        @if (view() === 'people') {
+          <span class="current">{{ selectedArea()?.name }}</span>
+        } @else {
+          <button (click)="goPeople()">{{ selectedArea()?.name }}</button>
+          <span class="sep">›</span>
+          <span class="current">{{ selectedPerson()?.name }}</span>
+        }
+      }
+    }
+  </nav>
 
-    <button class="btn primary" (click)="analyze()" [disabled]="!fileName() || loading()">
-      @if (loading()) { <span class="spinner"></span> Analizando… }
-      @else { Iniciar análisis }
-    </button>
-
-    @if (error()) { <p class="error">⚠ {{ error() }}</p> }
-  </section>
-
-  @if (analysis()) {
-    <section class="card result">
-      <div class="result-head">
-        <h2>Análisis</h2>
-        <button class="btn ghost" (click)="exportAnalysis()">⬇ Exportar</button>
+  <!-- ============ AREAS ============ -->
+  @if (view() === 'areas') {
+    <section class="card">
+      <div class="form-row">
+        <input #areaInput type="text" placeholder="Nueva área (ej. Cartera, Comercial)"
+          (keyup.enter)="addArea(areaInput)" />
+        <button class="btn primary" style="width:auto" (click)="addArea(areaInput)">+ Crear</button>
       </div>
-      <pre class="result-body">{{ analysis() }}</pre>
+
+      @if (areas().length === 0 && !loading()) {
+        <p class="list-empty">No hay áreas. Crea la primera.</p>
+      }
+      @for (a of areas(); track a.id) {
+        <div class="list-item" (click)="selectArea(a)">
+          <span class="name">{{ a.name }}</span>
+          <div class="actions">
+            <button class="btn danger small" (click)="deleteArea(a.id, $event)">Eliminar</button>
+          </div>
+        </div>
+      }
+      @if (loading()) { <p class="list-empty"><span class="spinner dark"></span></p> }
+      @if (error()) { <p class="error">{{ error() }}</p> }
     </section>
+  }
+
+  <!-- ============ PEOPLE ============ -->
+  @if (view() === 'people') {
+    <section class="card">
+      <div class="form-row">
+        <input #peopleInput type="text" placeholder="Nueva persona (ej. John Cartera)"
+          (keyup.enter)="addPerson(peopleInput)" />
+        <button class="btn primary" style="width:auto" (click)="addPerson(peopleInput)">+ Agregar</button>
+      </div>
+
+      @if (people().length === 0 && !loading()) {
+        <p class="list-empty">No hay personas en esta área.</p>
+      }
+      @for (p of people(); track p.id) {
+        <div class="list-item" (click)="selectPerson(p)">
+          <span class="name">{{ p.name }}</span>
+          <div class="actions">
+            <button class="btn danger small" (click)="deletePerson(p.id, $event)">Eliminar</button>
+          </div>
+        </div>
+      }
+      @if (loading()) { <p class="list-empty"><span class="spinner dark"></span></p> }
+      @if (error()) { <p class="error">{{ error() }}</p> }
+    </section>
+  }
+
+  <!-- ============ CHATS ============ -->
+  @if (view() === 'chats') {
+    <section class="card">
+      <h3 style="margin:0 0 .75rem;font-size:.95rem">Importar chat</h3>
+      <label class="drop" [class.filled]="fileName()">
+        <input type="file" accept=".txt,text/plain" (change)="onFile($event)" hidden />
+        <span class="drop-icon">📄</span>
+        <span class="drop-text">{{ fileName() || 'Selecciona el .txt del chat' }}</span>
+      </label>
+      <button class="btn primary" (click)="importChat()" [disabled]="!fileName() || uploading()">
+        @if (uploading()) { <span class="spinner"></span> Subiendo… }
+        @else { Importar chat }
+      </button>
+
+      @if (chats().length > 0) {
+        <h3 style="margin:1.25rem 0 .5rem;font-size:.95rem">Chats de {{ selectedPerson()?.name }}</h3>
+        @for (c of chats(); track c.id) {
+          <div class="list-item" (click)="openChat(c)">
+            <div style="flex:1;min-width:0">
+              @if (editingChatId() === c.id) {
+                <input #editInput class="inline-edit" [value]="c.filename"
+                  (keyup.enter)="saveChatName(c.id, editInput)"
+                  (keyup.escape)="cancelEdit()"
+                  (blur)="saveChatName(c.id, editInput)" />
+              } @else {
+                <div class="name">{{ c.filename }}</div>
+                <div class="meta">{{ c.created_at | date:'short' }}</div>
+              }
+            </div>
+            <div class="actions">
+              @if (c.analysis) {
+                <span class="badge-analizado">ANALIZADO</span>
+              }
+              <button class="btn ghost small icon-only" (click)="startEditChat(c.id, $event)" title="Renombrar">✎</button>
+              <button class="btn ghost small icon-only" (click)="deleteChat(c.id, $event)">✕</button>
+            </div>
+          </div>
+        }
+      } @else if (!loading()) {
+        <p class="list-empty">No hay chats importados aún.</p>
+      }
+
+      @if (loading()) { <p class="list-empty"><span class="spinner dark"></span></p> }
+      @if (error()) { <p class="error">{{ error() }}</p> }
+      @if (success()) { <p class="success">{{ success() }}</p> }
+    </section>
+
+    <!-- Chat detail -->
+    @if (selectedChat()) {
+      <section class="card chat-card">
+        <div class="chat-header">
+          <h2>{{ selectedChat()?.filename }}</h2>
+          <div style="display:flex;gap:.35rem">
+            @if (analysis()) {
+              <button class="btn ghost small" (click)="exportAnalysis()">⬇ Exportar</button>
+            }
+            <button class="btn primary small" (click)="runAnalysis()" [disabled]="analyzing()">
+              @if (analyzing()) { <span class="spinner"></span> }
+              @else { Analizar IA }
+            </button>
+            <button class="btn ghost small" (click)="selectedChat.set(null); analysis.set(''); chatMode.set('chat')">Cerrar</button>
+          </div>
+        </div>
+
+        <!-- tabs -->
+        <div class="chat-tabs">
+          <button class="tab" [class.active]="chatMode() === 'chat'" (click)="chatMode.set('chat')">Chat</button>
+          <button class="tab" [class.active]="chatMode() === 'analysis'" (click)="chatMode.set('analysis')"
+            [disabled]="!analysis() && !analyzing()">Análisis</button>
+        </div>
+
+        <!-- chat view -->
+        @if (chatMode() === 'chat') {
+          <div class="chat-container">
+            @for (m of messages(); track $index) {
+              @if ($first || messages()[$index - 1].sender !== m.sender) {
+                <div class="bubble-sender" [class.me]="m.side === 'me'">{{ m.sender || 'Sistema' }}</div>
+              }
+              <div class="bubble" [class.me]="m.side === 'me'">
+                <div class="bubble-text">{{ m.content }}</div>
+                <div class="bubble-time">{{ m.time }}</div>
+              </div>
+            }
+            @if (messages().length === 0 && chatRaw()) {
+              <div class="chat-fallback">{{ chatRaw() }}</div>
+            }
+            @if (messages().length === 0 && !chatRaw()) {
+              <p class="list-empty">No se pudieron parsear mensajes del chat.</p>
+            }
+          </div>
+        }
+
+        <!-- analysis view -->
+        @if (chatMode() === 'analysis') {
+          @if (analyzing()) {
+            <p class="list-empty"><span class="spinner dark"></span> Analizando conversación…</p>
+          } @else if (analysisHtml()) {
+            <div class="analysis-body" [innerHTML]="analysisHtml()"></div>
+          } @else {
+            <p class="list-empty">Este chat no ha sido analizado aún.</p>
+          }
+        }
+
+        @if (error()) { <p class="error">{{ error() }}</p> }
+      </section>
+    }
+  }
+
+  <!-- ============ confirm modal ============ -->
+  @if (confirmAction(); as c) {
+    <div class="modal-overlay" (click)="cancelConfirm()">
+      <div class="modal-box" (click)="$event.stopPropagation()">
+        <p>{{ c.message }}</p>
+        <div class="modal-actions">
+          <button class="btn ghost" (click)="cancelConfirm()">Cancelar</button>
+          <button class="btn danger" (click)="executeConfirm()">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ============ scroll top ============ -->
+  @if (showScrollTop()) {
+    <button class="scroll-top" (click)="scrollToTop()" aria-label="Volver arriba">˄</button>
   }
 </div>

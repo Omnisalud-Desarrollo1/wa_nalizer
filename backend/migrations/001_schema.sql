@@ -1,0 +1,26 @@
+CREATE TABLE IF NOT EXISTS areas (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS people (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  area_id INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chats (
+  id SERIAL PRIMARY KEY,
+  person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  area_id INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  raw_text TEXT NOT NULL,
+  analysis TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_people_area ON people(area_id);
+CREATE INDEX IF NOT EXISTS idx_chats_person ON chats(person_id);
+CREATE INDEX IF NOT EXISTS idx_chats_area ON chats(area_id);
