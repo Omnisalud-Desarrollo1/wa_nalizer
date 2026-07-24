@@ -1,1 +1,61 @@
-body { font-family: 'Montserrat', sans-serif; }
+@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;700&family=Quicksand:wght@300;400;500;700&display=swap');
+
+:root {
+  /* superficies (grises cálidos, apagados) */
+  --bg:          #e8e8e8;
+  --surface:     #f5f5f5;
+  --surface-alt: #ede9e3;
+  --border:      #d8d4ce;
+
+  /* tinta / texto */
+  --ink:         #333333;
+  --ink-soft:    #6b6b6b;
+  --ink-faint:   #9a938a;
+
+  /* marca (café tostado) */
+  --brand:       #5a3921;
+  --brand-soft:  #8a6d52;
+  --brand-wash:  #efe7df;
+
+  /* estados (apagados, cálidos, cada uno con su versión "lavada") */
+  --success:      #6f8a5a;  --success-wash: #e7ece0;  /* ok / analizado / positivo */
+  --warn:         #b8894e;  --warn-wash:    #f3ebda;  /* advertencia / pendiente */
+  --info:         #5f7d8a;  --info-wash:    #e2eaec;  /* informativo / en proceso */
+  --danger:       #a5644e;  --danger-wash:  #f0e2dc;  /* error / eliminar */
+  --accent-rose:  #b08585;  --accent-rose-wash: #f0e6e6; /* resaltado suave */
+
+  /* radios (mínimo viable — nada de pastilla) */
+  --r-sm: 3px;
+  --r-md: 5px;
+  --r-lg: 8px;
+
+  /* sombras (bajas, difusas, cálidas) */
+  --shadow-sm: 0 2px 6px rgba(90, 57, 33, .06);
+  --shadow-md: 0 5px 15px rgba(0, 0, 0, .05);
+  --shadow-inset: inset 0 1px 2px rgba(90, 57, 33, .05);
+
+  /* tipografía */
+  --font-head: 'Comfortaa', cursive;
+  --font-body: 'Quicksand', sans-serif;
+
+  /* espaciado (base 4px) */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-8: 48px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.6;
+  background-image: radial-gradient(rgba(90, 57, 33, .025) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-head); color: var(--brand); font-weight: 700; }
+
+::placeholder { color: var(--ink-faint); }
+::selection { background: var(--brand-wash); }
