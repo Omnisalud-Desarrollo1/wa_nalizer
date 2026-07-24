@@ -1,0 +1,31 @@
+<div class="page">
+  <header class="hero">
+    <h1>Wa-Nalizer</h1>
+    <p>Analiza un historial de chat y obtén insights.</p>
+  </header>
+
+  <section class="card">
+    <label class="drop" [class.filled]="fileName()">
+      <input type="file" accept=".txt,text/plain" (change)="onFile($event)" hidden />
+      <span class="drop-icon">📄</span>
+      <span class="drop-text">{{ fileName() || 'Selecciona el .txt del chat exportado' }}</span>
+    </label>
+
+    <button class="btn primary" (click)="analyze()" [disabled]="!fileName() || loading()">
+      @if (loading()) { <span class="spinner"></span> Analizando… }
+      @else { Iniciar análisis }
+    </button>
+
+    @if (error()) { <p class="error">⚠ {{ error() }}</p> }
+  </section>
+
+  @if (analysis()) {
+    <section class="card result">
+      <div class="result-head">
+        <h2>Análisis</h2>
+        <button class="btn ghost" (click)="exportAnalysis()">⬇ Exportar</button>
+      </div>
+      <pre class="result-body">{{ analysis() }}</pre>
+    </section>
+  }
+</div>
