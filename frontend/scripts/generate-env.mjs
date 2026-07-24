@@ -1,4 +1,4 @@
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,5 +12,16 @@ export const environment = {
 };
 `;
 
-writeFileSync(resolve(__dirname, '../src/environments/environment.ts'), content);
+// 1. Define the exact path where the file will be saved
+const targetPath = resolve(__dirname, '../src/environments/environment.ts');
+
+// 2. Extract just the directory path (../src/environments)
+const targetDir = dirname(targetPath);
+
+// 3. Create the directory structure if it doesn't already exist
+mkdirSync(targetDir, { recursive: true });
+
+// 4. Write the file safely now that the folder is guaranteed to exist
+writeFileSync(targetPath, content);
+
 console.log(`environment.ts → backendUrl=${backendUrl}`);
