@@ -116,7 +116,7 @@ if (process.argv.includes("--selfcheck")) {
   process.exit(0);
 }
 
-const app = express();
+export const app = express();
 app.use(cors({ origin: ALLOWED_ORIGIN }));
 app.use(express.json({ limit: "25mb" }));
 
@@ -135,4 +135,7 @@ app.post("/analyze", async (req, res) => {
   }
 });
 
-app.listen(Number(PORT), () => console.log(`wa_nalizer backend on :${PORT}`));
+// En Vercel/serverless no se llama a listen — la plataforma invoca el handler.
+if (!process.env.VERCEL) {
+  app.listen(Number(PORT), () => console.log(`wa_nalizer backend on :${PORT}`));
+}
