@@ -1,48 +1,90 @@
 @import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;700&family=Quicksand:wght@300;400;500;700&display=swap');
 
+/* ===== tokens NO-color (comunes a todas las paletas) ===== */
 :root {
-  /* superficies (grises cálidos, apagados) */
-  --bg:          #e8e8e8;
-  --surface:     #f5f5f5;
-  --surface-alt: #ede9e3;
-  --border:      #d8d4ce;
-
-  /* tinta / texto */
-  --ink:         #333333;
-  --ink-soft:    #6b6b6b;
-  --ink-faint:   #9a938a;
-
-  /* marca (café tostado) */
-  --brand:       #5a3921;
-  --brand-soft:  #8a6d52;
-  --brand-wash:  #efe7df;
-
-  /* estados (apagados, cálidos, cada uno con su versión "lavada") */
-  --success:      #6f8a5a;  --success-wash: #e7ece0;  /* ok / analizado / positivo */
-  --warn:         #b8894e;  --warn-wash:    #f3ebda;  /* advertencia / pendiente */
-  --info:         #5f7d8a;  --info-wash:    #e2eaec;  /* informativo / en proceso */
-  --danger:       #a5644e;  --danger-wash:  #f0e2dc;  /* error / eliminar */
-  --accent-rose:  #b08585;  --accent-rose-wash: #f0e6e6; /* resaltado suave */
-
-  /* radios (mínimo viable — nada de pastilla) */
   --r-sm: 3px;
   --r-md: 5px;
   --r-lg: 8px;
 
-  /* sombras (bajas, difusas, cálidas) */
-  --shadow-sm: 0 2px 6px rgba(90, 57, 33, .06);
-  --shadow-md: 0 5px 15px rgba(0, 0, 0, .05);
-  --shadow-inset: inset 0 1px 2px rgba(90, 57, 33, .05);
+  --shadow-sm: 0 2px 6px rgba(30, 45, 70, .08);
+  --shadow-md: 0 5px 15px rgba(30, 45, 70, .07);
+  --shadow-inset: inset 0 1px 2px rgba(30, 45, 70, .06);
 
-  /* tipografía */
   --font-head: 'Comfortaa', cursive;
   --font-body: 'Quicksand', sans-serif;
 
-  /* espaciado (base 4px) */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
   --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-8: 48px;
 }
 
+/* ===== PALETAS ===== */
+
+/* Teal (frío, vivo) */
+:root[data-palette="teal"] {
+  --bg: #e7ecf1; --surface: #f3f6f9; --surface-alt: #e2e9f0; --border: #ccd6e0;
+  --ink: #29303a; --ink-soft: #566273; --ink-faint: #93a0b0;
+  --brand: #1893a8; --brand-soft: #37b3c6; --brand-wash: #d7edf1;
+  --success: #1f9d76; --success-wash: #d6f0e6;
+  --warn: #c9932f; --warn-wash: #f4ecd4;
+  --info: #2f7fd1; --info-wash: #dbeaf8;
+  --danger: #d1495b; --danger-wash: #f8e0e4;
+  --accent-rose: #7b6cd9; --accent-rose-wash: #e8e4f8;
+  --grain: rgba(40, 60, 90, .03);
+}
+
+/* Café (cálido, original) */
+:root[data-palette="cafe"] {
+  --bg: #e8e8e8; --surface: #f5f5f5; --surface-alt: #ede9e3; --border: #d8d4ce;
+  --ink: #333333; --ink-soft: #6b6b6b; --ink-faint: #9a938a;
+  --brand: #5a3921; --brand-soft: #8a6d52; --brand-wash: #efe7df;
+  --success: #6f8a5a; --success-wash: #e7ece0;
+  --warn: #b8894e; --warn-wash: #f3ebda;
+  --info: #5f7d8a; --info-wash: #e2eaec;
+  --danger: #a5644e; --danger-wash: #f0e2dc;
+  --accent-rose: #b08585; --accent-rose-wash: #f0e6e6;
+  --grain: rgba(90, 57, 33, .025);
+}
+
+/* Índigo (frío, vivo, azul-violeta) — default */
+:root, :root[data-palette="indigo"] {
+  --bg: #eaecf3; --surface: #f4f5fa; --surface-alt: #e5e8f2; --border: #ccd1e2;
+  --ink: #262a3a; --ink-soft: #545a72; --ink-faint: #9198b3;
+  --brand: #4c63d2; --brand-soft: #6f83e0; --brand-wash: #e2e6fa;
+  --success: #2b9d6e; --success-wash: #d8f0e6;
+  --warn: #c98a2f; --warn-wash: #f4e9d4;
+  --info: #3f7ce0; --info-wash: #e0e9fb;
+  --danger: #d94a63; --danger-wash: #f9e1e6;
+  --accent-rose: #9a5fd0; --accent-rose-wash: #ece2f8;
+  --grain: rgba(50, 55, 110, .03);
+}
+
+/* Sage (frío, verde bosque) */
+:root[data-palette="sage"] {
+  --bg: #e8eeea; --surface: #f3f7f4; --surface-alt: #e2ebe5; --border: #cad9d0;
+  --ink: #263029; --ink-soft: #54655b; --ink-faint: #93a89a;
+  --brand: #3f8f6f; --brand-soft: #5cae8c; --brand-wash: #d8efe4;
+  --success: #2f9d5f; --success-wash: #d6f0e0;
+  --warn: #bf9235; --warn-wash: #f3ecd6;
+  --info: #3487b0; --info-wash: #dcecf3;
+  --danger: #cc5359; --danger-wash: #f8e2e3;
+  --accent-rose: #7f79c9; --accent-rose-wash: #e7e6f5;
+  --grain: rgba(40, 80, 60, .03);
+}
+
+/* Plum (frío, baya/violeta) */
+:root[data-palette="plum"] {
+  --bg: #efeaf1; --surface: #f7f3f9; --surface-alt: #ece2f0; --border: #d9cce0;
+  --ink: #2f2836; --ink-soft: #635870; --ink-faint: #a698af;
+  --brand: #8446a8; --brand-soft: #a066c4; --brand-wash: #efe1f6;
+  --success: #3f9d70; --success-wash: #d9f0e5;
+  --warn: #c58a3a; --warn-wash: #f4ebd7;
+  --info: #4f74cf; --info-wash: #e2e9f9;
+  --danger: #cf4d72; --danger-wash: #f9e0e8;
+  --accent-rose: #b0559c; --accent-rose-wash: #f3e2ef;
+  --grain: rgba(70, 40, 90, .03);
+}
+
+/* ===== base ===== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -51,7 +93,7 @@ body {
   font-family: var(--font-body);
   font-weight: 400;
   line-height: 1.6;
-  background-image: radial-gradient(rgba(90, 57, 33, .025) 1px, transparent 1px);
+  background-image: radial-gradient(var(--grain) 1px, transparent 1px);
   background-size: 4px 4px;
 }
 
