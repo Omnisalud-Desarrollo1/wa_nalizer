@@ -25,6 +25,18 @@ export function areasRouter() {
     }
   });
 
+  r.patch('/:id', async (req, res) => {
+    const name = (req.body?.name ?? '').toString().trim();
+    if (!name) return res.status(400).json({ error: 'name requerido' });
+    try {
+      const { rows } = await query('UPDATE areas SET name = $1 WHERE id = $2 RETURNING *', [name, req.params.id]);
+      res.json(rows[0]);
+    } catch (e: any) {
+      const code = e.code === '23505' ? 409 : 500;
+      res.status(code).json({ error: e.message });
+    }
+  });
+
   r.delete('/:id', async (req, res) => {
     try {
       await query('DELETE FROM areas WHERE id = $1', [req.params.id]);

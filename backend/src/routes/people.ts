@@ -27,6 +27,17 @@ export function peopleRouter() {
     }
   });
 
+  r.patch('/:id', async (req, res) => {
+    const name = (req.body?.name ?? '').toString().trim();
+    if (!name) return res.status(400).json({ error: 'name requerido' });
+    try {
+      const { rows } = await query('UPDATE people SET name = $1 WHERE id = $2 RETURNING *', [name, req.params.id]);
+      res.json(rows[0]);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   r.delete('/:id', async (req, res) => {
     try {
       await query('DELETE FROM people WHERE id = $1', [req.params.id]);

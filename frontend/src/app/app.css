@@ -137,6 +137,29 @@
   font-size: .85rem;
 }
 
+/* ---------- selección múltiple / bulk ---------- */
+.chk {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-right: .6rem;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  background: var(--brand-wash);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: .5rem .75rem;
+  margin-bottom: .5rem;
+  font-size: .85rem;
+  color: var(--brand);
+}
+
 /* ---------- form row ---------- */
 .form-row {
   display: flex;

@@ -22,6 +22,13 @@ interface Chat {
   analysis?: string;
   created_at: string;
 }
+interface BulkAnalysis {
+  id: number;
+  label: string;
+  chat_ids: number[];
+  analysis: string;
+  created_at: string;
+}
 
 type View = 'areas' | 'people' | 'chats';
 
@@ -43,7 +50,14 @@ export class App {
   selectedPerson = signal<Person | null>(null);
   chats = signal<Chat[]>([]);
   selectedChat = signal<Chat | null>(null);
+  selectedIds = signal<Set<number>>(new Set());
+  bulkList = signal<BulkAnalysis[]>([]);
+  selectedBulk = signal<BulkAnalysis | null>(null);
+  bulkAnalyzing = signal(false);
   editingChatId = signal<number | null>(null);
+  editingAreaId = signal<number | null>(null);
+  editingPersonId = signal<number | null>(null);
+  editingBulkId = signal<number | null>(null);
   analysis = signal('');
   analysisHtml = computed(() => {
     const a = this.analysis();
@@ -130,10 +144,13 @@ export class App {
     this.selectedPerson.set(p);
     this.view.set('chats');
     this.selectedChat.set(null);
+    this.selectedBulk.set(null);
+    this.selectedIds.set(new Set());
     this.analysis.set('');
     this.error.set('');
     this.success.set('');
     await this.fetchChats();
+    await this.fetchBulk();
   }
 
   /* ============ areas ============ */
@@ -174,6 +191,23 @@ export class App {
         this.error.set(e?.error?.error ?? 'Error al eliminar');
       }
     });
+  }
+
+  startEditArea(id: number, event: Event) {
+    event.stopPropagation();
+    this.editingAreaId.set(id);
+  }
+
+  async saveAreaName(id: number, input: HTMLInputElement) {
+    const name = input.value.trim();
+    if (!name) { this.editingAreaId.set(null); return; }
+    try {
+      await this.http.patch(api(`/api/areas/${id}`), { name }).toPromise();
+      this.editingAreaId.set(null);
+      await this.fetchAreas();
+    } catch (e: any) {
+      this.error.set(e?.error?.error ?? 'Error al renombrar');
+    }
   }
 
   /* ============ people ============ */
@@ -217,6 +251,23 @@ export class App {
         this.error.set(e?.error?.error ?? 'Error al eliminar');
       }
     });
+  }
+
+  startEditPerson(id: number, event: Event) {
+    event.stopPropagation();
+    this.editingPersonId.set(id);
+  }
+
+  async savePersonName(id: number, input: HTMLInputElement) {
+    const name = input.value.trim();
+    if (!name) { this.editingPersonId.set(null); return; }
+    try {
+      await this.http.patch(api(`/api/areas/0/people/${id}`), { name }).toPromise();
+      this.editingPersonId.set(null);
+      await this.fetchPeople();
+    } catch (e: any) {
+      this.error.set(e?.error?.error ?? 'Error al renombrar');
+    }
   }
 
   /* ============ chats ============ */
@@ -279,6 +330,7 @@ export class App {
     this.error.set('');
     this.chatMode.set('chat');
     this.analysis.set('');
+    this.selectedBulk.set(null);
     this.selectedChat.set(c);
     try {
       const r = await this.http.get<Chat>(api(`/api/chats/${c.id}`)).toPromise();
@@ -313,6 +365,93 @@ export class App {
     }
   }
 
+  /* ---- selección múltiple / bulk ---- */
+
+  clearSelection() {
+    this.selectedIds.set(new Set());
+  }
+
+  toggleSelect(id: number, event: Event) {
+    event.stopPropagation();
+    const s = new Set(this.selectedIds());
+    s.has(id) ? s.delete(id) : s.add(id);
+    this.selectedIds.set(s);
+  }
+
+  async fetchBulk() {
+    const personId = this.selectedPerson()?.id;
+    if (!personId) return;
+    try {
+      const r = await this.http
+        .get<BulkAnalysis[]>(api('/api/chats/bulk'), { params: { person_id: String(personId) } })
+        .toPromise();
+      this.bulkList.set(r ?? []);
+    } catch {
+      /* silencioso: la lista conjunta es secundaria */
+    }
+  }
+
+  async runBulk() {
+    const ids = [...this.selectedIds()];
+    if (ids.length < 2 || this.bulkAnalyzing()) return;
+    this.bulkAnalyzing.set(true);
+    this.error.set('');
+    try {
+      const r = await this.http
+        .post<BulkAnalysis>(api('/api/chats/bulk-analyze'), { chat_ids: ids })
+        .toPromise();
+      this.selectedIds.set(new Set());
+      await this.fetchBulk();
+      if (r) this.openBulk(r);
+    } catch (e: any) {
+      this.error.set(e?.error?.error ?? 'Error en el análisis conjunto');
+    } finally {
+      this.bulkAnalyzing.set(false);
+    }
+  }
+
+  openBulk(b: BulkAnalysis) {
+    this.selectedChat.set(null);
+    this.selectedBulk.set(b);
+    this.analysis.set(b.analysis);
+    this.chatMode.set('analysis');
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  }
+
+  startEditBulk(id: number, event: Event) {
+    event.stopPropagation();
+    this.editingBulkId.set(id);
+  }
+
+  async saveBulkName(id: number, input: HTMLInputElement) {
+    const label = input.value.trim();
+    if (!label) { this.editingBulkId.set(null); return; }
+    try {
+      await this.http.patch(api(`/api/chats/bulk/${id}`), { label }).toPromise();
+      this.editingBulkId.set(null);
+      await this.fetchBulk();
+      if (this.selectedBulk()?.id === id) this.selectedBulk.update((b) => (b ? { ...b, label } : b));
+    } catch (e: any) {
+      this.error.set(e?.error?.error ?? 'Error al renombrar');
+    }
+  }
+
+  deleteBulk(id: number, event: Event) {
+    event.stopPropagation();
+    this.confirm('¿Eliminar este análisis conjunto?', async () => {
+      try {
+        await this.http.delete(api(`/api/chats/bulk/${id}`)).toPromise();
+        if (this.selectedBulk()?.id === id) {
+          this.selectedBulk.set(null);
+          this.analysis.set('');
+        }
+        await this.fetchBulk();
+      } catch (e: any) {
+        this.error.set(e?.error?.error ?? 'Error al eliminar');
+      }
+    });
+  }
+
   deleteChat(id: number, event: Event) {
     event.stopPropagation();
     this.confirm('¿Eliminar este chat?', async () => {
@@ -338,6 +477,9 @@ export class App {
 
   cancelEdit() {
     this.editingChatId.set(null);
+    this.editingAreaId.set(null);
+    this.editingPersonId.set(null);
+    this.editingBulkId.set(null);
   }
 
   async saveChatName(id: number, input: HTMLInputElement) {

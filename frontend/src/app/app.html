@@ -36,8 +36,16 @@
       }
       @for (a of areas(); track a.id) {
         <div class="list-item" (click)="selectArea(a)">
-          <span class="name">{{ a.name }}</span>
+          @if (editingAreaId() === a.id) {
+            <input #editArea class="inline-edit" [value]="a.name" (click)="$event.stopPropagation()"
+              (keyup.enter)="saveAreaName(a.id, editArea)"
+              (keyup.escape)="cancelEdit()"
+              (blur)="saveAreaName(a.id, editArea)" />
+          } @else {
+            <span class="name">{{ a.name }}</span>
+          }
           <div class="actions">
+            <button class="btn ghost small icon-only" (click)="startEditArea(a.id, $event)" title="Renombrar">✎</button>
             <button class="btn danger small" (click)="deleteArea(a.id, $event)">Eliminar</button>
           </div>
         </div>
@@ -61,8 +69,16 @@
       }
       @for (p of people(); track p.id) {
         <div class="list-item" (click)="selectPerson(p)">
-          <span class="name">{{ p.name }}</span>
+          @if (editingPersonId() === p.id) {
+            <input #editPerson class="inline-edit" [value]="p.name" (click)="$event.stopPropagation()"
+              (keyup.enter)="savePersonName(p.id, editPerson)"
+              (keyup.escape)="cancelEdit()"
+              (blur)="savePersonName(p.id, editPerson)" />
+          } @else {
+            <span class="name">{{ p.name }}</span>
+          }
           <div class="actions">
+            <button class="btn ghost small icon-only" (click)="startEditPerson(p.id, $event)" title="Renombrar">✎</button>
             <button class="btn danger small" (click)="deletePerson(p.id, $event)">Eliminar</button>
           </div>
         </div>
@@ -88,8 +104,24 @@
 
       @if (chats().length > 0) {
         <h3 style="margin:1.25rem 0 .5rem;font-size:.95rem">Chats de {{ selectedPerson()?.name }}</h3>
+
+        @if (selectedIds().size > 0) {
+          <div class="bulk-bar">
+            <span>{{ selectedIds().size }} seleccionado(s)</span>
+            <div style="display:flex;gap:.35rem">
+              <button class="btn ghost small" (click)="clearSelection()" [disabled]="bulkAnalyzing()">Limpiar</button>
+              <button class="btn primary small" (click)="runBulk()" [disabled]="selectedIds().size < 2 || bulkAnalyzing()">
+                @if (bulkAnalyzing()) { <span class="spinner"></span> Analizando… }
+                @else { Analizar {{ selectedIds().size }} en conjunto }
+              </button>
+            </div>
+          </div>
+        }
+
         @for (c of chats(); track c.id) {
           <div class="list-item" (click)="openChat(c)">
+            <input type="checkbox" class="chk" [checked]="selectedIds().has(c.id)"
+              (click)="toggleSelect(c.id, $event)" title="Seleccionar para análisis conjunto" />
             <div style="flex:1;min-width:0">
               @if (editingChatId() === c.id) {
                 <input #editInput class="inline-edit" [value]="c.filename"
@@ -114,10 +146,48 @@
         <p class="list-empty">No hay chats importados aún.</p>
       }
 
+      @if (bulkList().length > 0) {
+        <h3 style="margin:1.25rem 0 .5rem;font-size:.95rem">Análisis conjuntos</h3>
+        @for (b of bulkList(); track b.id) {
+          <div class="list-item" (click)="openBulk(b)">
+            <div style="flex:1;min-width:0">
+              @if (editingBulkId() === b.id) {
+                <input #editBulk class="inline-edit" [value]="b.label" (click)="$event.stopPropagation()"
+                  (keyup.enter)="saveBulkName(b.id, editBulk)"
+                  (keyup.escape)="cancelEdit()"
+                  (blur)="saveBulkName(b.id, editBulk)" />
+              } @else {
+                <div class="name">{{ b.label }}</div>
+                <div class="meta">{{ b.chat_ids.length }} chats · {{ b.created_at | date:'short' }}</div>
+              }
+            </div>
+            <div class="actions">
+              <span class="badge-analizado">CONJUNTO</span>
+              <button class="btn ghost small icon-only" (click)="startEditBulk(b.id, $event)" title="Renombrar">✎</button>
+              <button class="btn ghost small icon-only" (click)="deleteBulk(b.id, $event)">✕</button>
+            </div>
+          </div>
+        }
+      }
+
       @if (loading()) { <p class="list-empty"><span class="spinner dark"></span></p> }
       @if (error()) { <p class="error">{{ error() }}</p> }
       @if (success()) { <p class="success">{{ success() }}</p> }
     </section>
+
+    <!-- Bulk analysis detail -->
+    @if (selectedBulk(); as b) {
+      <section class="card chat-card">
+        <div class="chat-header">
+          <h2>{{ b.label }}</h2>
+          <div style="display:flex;gap:.35rem">
+            <button class="btn ghost small" (click)="exportAnalysis()">⬇ Exportar</button>
+            <button class="btn ghost small" (click)="selectedBulk.set(null); analysis.set('')">Cerrar</button>
+          </div>
+        </div>
+        <div class="analysis-body" [innerHTML]="analysisHtml()"></div>
+      </section>
+    }
 
     <!-- Chat detail -->
     @if (selectedChat()) {
