@@ -53,10 +53,13 @@ export function chatsRouter() {
         [ids],
       );
       if (chats.length < 2) return res.status(404).json({ error: 'chats no encontrados' });
+      const { rows: areaRows } = await query('SELECT system_prompt, map_prompt FROM areas WHERE id = $1', [
+        chats[0].area_id,
+      ]);
       const combined = chats
         .map((c: any) => `## Chat: ${c.filename}\n${c.raw_text}`)
         .join('\n\n----------------\n\n');
-      const analysis = await analyze(combined);
+      const analysis = await analyze(combined, areaRows[0]?.system_prompt ?? undefined, areaRows[0]?.map_prompt ?? undefined);
       const { rows } = await query(
         'INSERT INTO bulk_analyses (person_id, area_id, chat_ids, label, analysis) VALUES ($1,$2,$3,$4,$5) RETURNING *',
         [chats[0].person_id, chats[0].area_id, ids, label || `Conjunto (${chats.length} chats)`, analysis],
@@ -117,10 +120,13 @@ export function chatsRouter() {
 
   r.post('/:id/analyze', async (req, res) => {
     try {
-      const { rows } = await query('SELECT id, raw_text FROM chats WHERE id = $1', [req.params.id]);
+      const { rows } = await query(
+        'SELECT c.id, c.raw_text, a.system_prompt, a.map_prompt FROM chats c JOIN areas a ON a.id = c.area_id WHERE c.id = $1',
+        [req.params.id],
+      );
       if (!rows[0]) return res.status(404).json({ error: 'chat no encontrado' });
       const chat = rows[0];
-      const analysis = await analyze(chat.raw_text);
+      const analysis = await analyze(chat.raw_text, chat.system_prompt ?? undefined, chat.map_prompt ?? undefined);
       await query('UPDATE chats SET analysis = $1 WHERE id = $2', [analysis, chat.id]);
       res.json({ analysis });
     } catch (e: any) {

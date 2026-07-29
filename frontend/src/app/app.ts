@@ -56,6 +56,8 @@ export class App {
   bulkAnalyzing = signal(false);
   editingChatId = signal<number | null>(null);
   editingAreaId = signal<number | null>(null);
+  // ponytail: gestión de áreas deshabilitada temporalmente (prompts ahora fijos por área en DB), reactivar cuando haya UI de edición de prompts
+  readonly areasEditable = false;
   editingPersonId = signal<number | null>(null);
   editingBulkId = signal<number | null>(null);
   analysis = signal('');
@@ -168,6 +170,7 @@ export class App {
   }
 
   async addArea(input: HTMLInputElement) {
+    if (!this.areasEditable) return;
     const name = input.value.trim();
     if (!name) return;
     this.error.set('');
@@ -182,6 +185,7 @@ export class App {
 
   deleteArea(id: number, event: Event) {
     event.stopPropagation();
+    if (!this.areasEditable) return;
     this.confirm('¿Eliminar esta área y todas sus personas y chats?', async () => {
       this.error.set('');
       try {
@@ -195,10 +199,12 @@ export class App {
 
   startEditArea(id: number, event: Event) {
     event.stopPropagation();
+    if (!this.areasEditable) return;
     this.editingAreaId.set(id);
   }
 
   async saveAreaName(id: number, input: HTMLInputElement) {
+    if (!this.areasEditable) return;
     const name = input.value.trim();
     if (!name) { this.editingAreaId.set(null); return; }
     try {

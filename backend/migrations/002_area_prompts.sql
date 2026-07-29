@@ -1,14 +1,10 @@
-const {
-  OPENROUTER_API_KEY,
-  OPENROUTER_MODEL = 'openai/gpt-oss-20b:free',
-  CHUNK_CHARS = '40000',
-  MAX_CHUNKS = '40',
-} = process.env;
+-- Prompts dinámicos por área. Ejecutar en Supabase/psql.
+ALTER TABLE areas ADD COLUMN IF NOT EXISTS system_prompt TEXT;
+ALTER TABLE areas ADD COLUMN IF NOT EXISTS map_prompt TEXT;
 
-const chunkChars = Number(CHUNK_CHARS);
-const maxChunks = Number(MAX_CHUNKS);
-
-const SYSTEM_PROMPT = `
+-- Migra el prompt de Cartera (antes hardcodeado en backend/src/analyze.ts) a la fila existente.
+UPDATE areas SET
+  system_prompt = $sys$
 Eres un auditor experto en gestión de cartera, recuperación de cartera y cobranza.
 
 Analizarás conversaciones de WhatsApp entre asesores de cartera y clientes.
@@ -120,9 +116,8 @@ Responde únicamente en español.
 Sé objetivo, crítico y basado exclusivamente en el contenido del chat.
 
 No inventes información.
-`;
-
-const MAP_PROMPT = `
+$sys$,
+  map_prompt = $map$
 Analiza únicamente este fragmento de una conversación de cartera.
 
 Extrae únicamente hechos observables.
@@ -148,82 +143,11 @@ No generes conclusiones globales.
 No resumas.
 
 Solo devuelve información estructurada que pueda combinarse posteriormente con otros fragmentos.
-`;
+$map$
+WHERE name = 'Cartera';
 
-function chunkByLines(text: string, size: number): string[] {
-  const lines = text.split('\n');
-  const chunks: string[] = [];
-  let buf = '';
-  for (const line of lines) {
-    if (buf.length + line.length + 1 > size && buf) {
-      chunks.push(buf);
-      buf = '';
-    }
-    buf += line + '\n';
-  }
-  if (buf) chunks.push(buf);
-  return chunks;
-}
-
-async function ask(system: string, user: string, maxRetries = 3): Promise<string> {
-  let lastErr: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: OPENROUTER_MODEL,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        }),
-        signal: AbortSignal.timeout(120000),
-      });
-      if (res.status === 429 || res.status >= 500) {
-        lastErr = new Error(`OpenRouter ${res.status}: ${await res.text().catch(() => '')}`);
-        throw lastErr;
-      }
-      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content ?? '';
-    } catch (e) {
-      lastErr = e;
-      if (attempt === maxRetries) break;
-      const delay = Math.pow(2, attempt) * 1000;
-      console.error(`ask attempt ${attempt + 1} failed, retrying in ${delay}ms: ${(e as Error).message}`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-  }
-  throw lastErr;
-}
-
-export async function analyze(
-  text: string,
-  systemPrompt: string = SYSTEM_PROMPT,
-  mapPrompt: string = MAP_PROMPT,
-): Promise<string> {
-  let chunks = chunkByLines(text, chunkChars);
-  let capped = false;
-  if (chunks.length > maxChunks) {
-    chunks = chunks.slice(0, maxChunks);
-    capped = true;
-  }
-
-  if (chunks.length <= 1) return ask(systemPrompt, text);
-
-  const notes: string[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    notes.push(`### Fragmento ${i + 1}\n` + (await ask(mapPrompt, chunks[i])));
-  }
-
-  const reduceUser =
-    'Notas de varios fragmentos del MISMO chat, en orden. Combínalas en un análisis final coherente:\n\n' +
-    notes.join('\n\n') +
-    (capped ? '\n\n(Nota: el chat era muy largo y se analizó una parte.)' : '');
-  return ask(systemPrompt, reduceUser);
-}
+-- Nuevas áreas. Placeholders: el contenido real del prompt se define externamente.
+INSERT INTO areas (name, system_prompt, map_prompt) VALUES
+  ('Comercial', '[PLACEHOLDER] Prompt de análisis para el área Comercial. Definir criterios de evaluación.', '[PLACEHOLDER] Prompt de fragmento (map) para el área Comercial.'),
+  ('Servicio al Cliente', '[PLACEHOLDER] Prompt de análisis para el área Servicio al Cliente. Definir criterios de evaluación.', '[PLACEHOLDER] Prompt de fragmento (map) para el área Servicio al Cliente.')
+ON CONFLICT (name) DO NOTHING;
