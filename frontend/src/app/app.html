@@ -25,11 +25,13 @@
   <!-- ============ AREAS ============ -->
   @if (view() === 'areas') {
     <section class="card">
-      <div class="form-row">
-        <input #areaInput type="text" placeholder="Nueva área (ej. Cartera, Comercial)"
-          [disabled]="!areasEditable" (keyup.enter)="addArea(areaInput)" />
-        <button class="btn primary" style="width:auto" [disabled]="!areasEditable" (click)="addArea(areaInput)">+ Crear</button>
-      </div>
+      @if (areasEditable) {
+        <div class="form-row">
+          <input #areaInput type="text" placeholder="Nueva área (ej. Cartera, Comercial)"
+            (keyup.enter)="addArea(areaInput)" />
+          <button class="btn primary" style="width:auto" (click)="addArea(areaInput)">+ Crear</button>
+        </div>
+      }
 
       @if (areas().length === 0 && !loading()) {
         <p class="list-empty">No hay áreas. Crea la primera.</p>
@@ -45,8 +47,10 @@
             <span class="name">{{ a.name }}</span>
           }
           <div class="actions">
-            <button class="btn ghost small icon-only" [disabled]="!areasEditable" (click)="startEditArea(a.id, $event)" title="Renombrar">✎</button>
-            <button class="btn danger small" [disabled]="!areasEditable" (click)="deleteArea(a.id, $event)">Eliminar</button>
+            @if (areasEditable) {
+              <button class="btn ghost small icon-only" (click)="startEditArea(a.id, $event)" title="Renombrar">✎</button>
+              <button class="btn danger small" (click)="deleteArea(a.id, $event)">Eliminar</button>
+            }
           </div>
         </div>
       }
