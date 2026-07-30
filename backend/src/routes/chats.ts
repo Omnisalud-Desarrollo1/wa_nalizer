@@ -53,16 +53,23 @@ export function chatsRouter() {
         [ids],
       );
       if (chats.length < 2) return res.status(404).json({ error: 'chats no encontrados' });
-      const { rows: areaRows } = await query('SELECT system_prompt, map_prompt FROM areas WHERE id = $1', [
+      const { rows: areaRows } = await query('SELECT system_prompt, map_prompt, advisor_prompt FROM areas WHERE id = $1', [
         chats[0].area_id,
       ]);
       const combined = chats
         .map((c: any) => `## Chat: ${c.filename}\n${c.raw_text}`)
         .join('\n\n----------------\n\n');
+      console.log(
+        `bulk-analyze: chats=${chats.map((c: any) => c.id).join(',')} area=${chats[0].area_id} ` +
+          `customPrompt=${!!areaRows[0]?.system_prompt} customMapPrompt=${!!areaRows[0]?.map_prompt} ` +
+          `advisorPrompt=${!!areaRows[0]?.advisor_prompt}`,
+      );
       const analysis = await analyze(combined, areaRows[0]?.system_prompt ?? undefined, areaRows[0]?.map_prompt ?? undefined);
+      // el prompt de asesor parte del análisis YA consolidado (barato, 1 llamada) en vez de re-procesar los chats crudos
+      const advisorAnalysis = areaRows[0]?.advisor_prompt ? await analyze(analysis, areaRows[0].advisor_prompt) : null;
       const { rows } = await query(
-        'INSERT INTO bulk_analyses (person_id, area_id, chat_ids, label, analysis) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-        [chats[0].person_id, chats[0].area_id, ids, label || `Conjunto (${chats.length} chats)`, analysis],
+        'INSERT INTO bulk_analyses (person_id, area_id, chat_ids, label, analysis, advisor_analysis) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+        [chats[0].person_id, chats[0].area_id, ids, label || `Conjunto (${chats.length} chats)`, analysis, advisorAnalysis],
       );
       res.status(201).json(rows[0]);
     } catch (e: any) {
@@ -126,6 +133,9 @@ export function chatsRouter() {
       );
       if (!rows[0]) return res.status(404).json({ error: 'chat no encontrado' });
       const chat = rows[0];
+      console.log(
+        `analyze chat=${chat.id} customPrompt=${!!chat.system_prompt} customMapPrompt=${!!chat.map_prompt}`,
+      );
       const analysis = await analyze(chat.raw_text, chat.system_prompt ?? undefined, chat.map_prompt ?? undefined);
       await query('UPDATE chats SET analysis = $1 WHERE id = $2', [analysis, chat.id]);
       res.json({ analysis });

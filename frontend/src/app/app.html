@@ -96,15 +96,35 @@
   @if (view() === 'chats') {
     <section class="card">
       <h3 style="margin:0 0 .75rem;font-size:.95rem">Importar chat</h3>
-      <label class="drop" [class.filled]="fileName()">
-        <input type="file" accept=".txt,text/plain" (change)="onFile($event)" hidden />
+      <label class="drop" [class.filled]="fileNames().length > 0" [class.dragover]="dragOver()"
+        (dragover)="onDragOver($event)" (dragleave)="onDragLeave()" (drop)="onDrop($event)">
+        <input type="file" accept=".txt,text/plain" multiple (change)="onFile($event)" hidden />
         <span class="drop-icon">📄</span>
-        <span class="drop-text">{{ fileName() || 'Selecciona el .txt del chat' }}</span>
+        @if (fileNames().length === 0) {
+          <span class="drop-text">Selecciona o arrastra .txt del chat</span>
+        } @else {
+          <span class="drop-text">{{ fileNames().length }} archivo(s) seleccionado(s)</span>
+          <div class="file-list">
+            @for (name of fileNames(); track $index) {
+              <span class="file-chip">{{ name }}</span>
+            }
+          </div>
+        }
       </label>
-      <button class="btn primary" (click)="importChat()" [disabled]="!fileName() || uploading()">
-        @if (uploading()) { <span class="spinner"></span> Subiendo… }
-        @else { Importar chat }
-      </button>
+      @if (fileNames().length > 0) {
+        <div style="display:flex;gap:.35rem;margin-bottom:.75rem">
+          <button class="btn ghost small" (click)="clearFiles()">Limpiar</button>
+          <button class="btn primary" (click)="importChat()" [disabled]="uploading()">
+            @if (uploading()) { <span class="spinner"></span> Subiendo… }
+            @else { Importar {{ fileNames().length }} chat(s) }
+          </button>
+        </div>
+      } @else {
+        <button class="btn primary" (click)="importChat()" [disabled]="uploading()">
+          @if (uploading()) { <span class="spinner"></span> Subiendo… }
+          @else { Importar chat }
+        </button>
+      }
 
       @if (chats().length > 0) {
         <h3 style="margin:1.25rem 0 .5rem;font-size:.95rem">Chats de {{ selectedPerson()?.name }}</h3>
@@ -113,6 +133,9 @@
           <div class="bulk-bar">
             <span>{{ selectedIds().size }} seleccionado(s)</span>
             <div style="display:flex;gap:.35rem">
+              @if (selectedIds().size < chats().length) {
+                <button class="btn ghost small" (click)="selectAllChats()" [disabled]="bulkAnalyzing()">Seleccionar todos</button>
+              }
               <button class="btn ghost small" (click)="clearSelection()" [disabled]="bulkAnalyzing()">Limpiar</button>
               <button class="btn primary small" (click)="runBulk()" [disabled]="selectedIds().size < 2 || bulkAnalyzing()">
                 @if (bulkAnalyzing()) { <span class="spinner"></span> Analizando… }
@@ -186,10 +209,25 @@
           <h2>{{ b.label }}</h2>
           <div style="display:flex;gap:.35rem">
             <button class="btn ghost small" (click)="exportAnalysis()">⬇ Exportar</button>
-            <button class="btn ghost small" (click)="selectedBulk.set(null); analysis.set('')">Cerrar</button>
+            <button class="btn ghost small" (click)="selectedBulk.set(null); analysis.set(''); advisorAnalysis.set(''); chatMode.set('chat')">Cerrar</button>
           </div>
         </div>
-        <div class="analysis-body" [innerHTML]="analysisHtml()"></div>
+
+        <div class="chat-tabs">
+          <button class="tab" [class.active]="chatMode() === 'analysis'" (click)="chatMode.set('analysis')">Análisis</button>
+          <button class="tab" [class.active]="chatMode() === 'advisor'" (click)="chatMode.set('advisor')"
+            [disabled]="!b.advisor_analysis">Análisis asesor</button>
+        </div>
+
+        @if (chatMode() === 'advisor') {
+          @if (b.advisor_analysis) {
+            <div class="analysis-body" [innerHTML]="advisorAnalysisHtml()"></div>
+          } @else {
+            <p class="list-empty">Este análisis conjunto no tiene análisis de asesor (falta configurar el prompt del área).</p>
+          }
+        } @else {
+          <div class="analysis-body" [innerHTML]="analysisHtml()"></div>
+        }
       </section>
     }
 

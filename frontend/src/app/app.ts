@@ -27,6 +27,7 @@ interface BulkAnalysis {
   label: string;
   chat_ids: number[];
   analysis: string;
+  advisor_analysis: string | null;
   created_at: string;
 }
 
@@ -65,15 +66,21 @@ export class App {
     const a = this.analysis();
     return a ? markdownToHtml(a) : '';
   });
+  advisorAnalysis = signal('');
+  advisorAnalysisHtml = computed(() => {
+    const a = this.advisorAnalysis();
+    return a ? markdownToHtml(a) : '';
+  });
   chatRaw = signal('');
-  chatMode = signal<'chat' | 'analysis'>('chat');
+  chatMode = signal<'chat' | 'analysis' | 'advisor'>('chat');
   messages = computed(() => {
     const raw = this.chatRaw();
     const me = this.selectedPerson()?.name ?? '';
     return raw && me ? parseChat(raw, me) : [];
   });
 
-  fileName = signal('');
+  fileNames = signal<string[]>([]);
+  dragOver = signal(false);
   loading = signal(false);
   uploading = signal(false);
   analyzing = signal(false);
@@ -83,7 +90,7 @@ export class App {
   confirmAction = signal<{ message: string; fn: () => void } | null>(null);
   showScrollTop = signal(false);
 
-  private chatText = '';
+  private chatTexts: string[] = [];
 
   @HostListener('window:scroll')
   onScroll() {
@@ -278,12 +285,52 @@ export class App {
 
   /* ============ chats ============ */
 
+  private cleanFilename(name: string): string {
+    return name.replace(/^Chat de WhatsApp con\s*/i, '').replace(/\.txt$/i, '');
+  }
+
   async onFile(event: Event) {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    this.fileName.set(file.name);
-    this.chatText = await file.text();
+    const files = input.files;
+    if (!files || files.length === 0) return;
+    this.error.set('');
+    this.success.set('');
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      this.fileNames.update(n => [...n, this.cleanFilename(f.name)]);
+      this.chatTexts.push(await f.text());
+    }
+    input.value = '';
+  }
+
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.dragOver.set(true);
+  }
+
+  onDragLeave() {
+    this.dragOver.set(false);
+  }
+
+  async onDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.dragOver.set(false);
+    const files = event.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    this.error.set('');
+    this.success.set('');
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      this.fileNames.update(n => [...n, this.cleanFilename(f.name)]);
+      this.chatTexts.push(await f.text());
+    }
+  }
+
+  clearFiles() {
+    this.fileNames.set([]);
+    this.chatTexts = [];
     this.error.set('');
     this.success.set('');
   }
@@ -305,28 +352,32 @@ export class App {
   }
 
   async importChat() {
-    if (!this.chatText || this.uploading()) return;
+    if (this.chatTexts.length === 0 || this.uploading()) return;
     const person = this.selectedPerson();
     const area = this.selectedArea();
     if (!person || !area) return;
     this.uploading.set(true);
     this.error.set('');
     this.success.set('');
+    let imported = 0;
     try {
-      await this.http
-        .post(api('/api/chats'), {
-          filename: this.fileName(),
-          text: this.chatText,
-          person_id: person.id,
-          area_id: area.id,
-        })
-        .toPromise();
-      this.fileName.set('');
-      this.chatText = '';
-      this.success.set('Chat importado exitosamente');
+      for (let i = 0; i < this.chatTexts.length; i++) {
+        await this.http
+          .post(api('/api/chats'), {
+            filename: this.fileNames()[i],
+            text: this.chatTexts[i],
+            person_id: person.id,
+            area_id: area.id,
+          })
+          .toPromise();
+        imported++;
+      }
+      this.fileNames.set([]);
+      this.chatTexts = [];
+      this.success.set(imported === 1 ? 'Chat importado exitosamente' : `${imported} chats importados exitosamente`);
       await this.fetchChats();
     } catch (e: any) {
-      this.error.set(e?.error?.error ?? 'Error al importar chat');
+      this.error.set(e?.error?.error ?? `Error al importar (${imported}/${this.fileNames().length})`);
     } finally {
       this.uploading.set(false);
     }
@@ -377,6 +428,10 @@ export class App {
     this.selectedIds.set(new Set());
   }
 
+  selectAllChats() {
+    this.selectedIds.set(new Set(this.chats().map((c) => c.id)));
+  }
+
   toggleSelect(id: number, event: Event) {
     event.stopPropagation();
     const s = new Set(this.selectedIds());
@@ -420,6 +475,7 @@ export class App {
     this.selectedChat.set(null);
     this.selectedBulk.set(b);
     this.analysis.set(b.analysis);
+    this.advisorAnalysis.set(b.advisor_analysis ?? '');
     this.chatMode.set('analysis');
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }

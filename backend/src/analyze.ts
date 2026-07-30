@@ -165,24 +165,42 @@ function chunkByLines(text: string, size: number): string[] {
   return chunks;
 }
 
+// ponytail: heurística simple para modelos free que a veces responden pidiendo
+// el input en vez de analizarlo (confunden notas de reduce con "falta contenido")
+const REFUSAL_RE =
+  /proporcion(a|e|ame)?\s+(el|los|tu)?\s*fragmento|falta(n)?\s+(el|los)?\s*fragmento|no\s+(tengo|cuento con|encuentro)\s+(acceso|el fragmento|la conversaci[oó]n)|comp[aá]rte\s+(el|los)\s*fragmento|env[ií]a\s+(el|los)\s*fragmento/i;
+
+function looksLikeRefusal(content: string): boolean {
+  return content.trim().length < 40 || REFUSAL_RE.test(content);
+}
+
+// ponytail: preview de una línea para poder eyeballear en logs qué se manda/recibe de verdad
+const preview = (s: string, n = 220) => JSON.stringify(s.slice(0, n).replace(/\s+/g, ' ').trim());
+
 async function ask(system: string, user: string, maxRetries = 3): Promise<string> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      console.log(`ask: model=${OPENROUTER_MODEL} system=${system.length}chars user=${user.length}chars (intento ${attempt + 1})`);
+      console.log(`ask: system[0:220]=${preview(system)}`);
+      console.log(`ask: user[0:220]=${preview(user)}`);
+      const body = JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+      });
+      console.log(`ask: body enviado = ${Buffer.byteLength(body)} bytes (estimado ~${Math.round((system.length + user.length) / 4)} tokens)`);
+      const t0 = Date.now();
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: OPENROUTER_MODEL,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        }),
-        signal: AbortSignal.timeout(120000),
+        body,
+        signal: AbortSignal.timeout(180000), // ponytail: 120s abortaba modelos free lentos-pero-vivos, forzando un retry completo (doble espera)
       });
       if (res.status === 429 || res.status >= 500) {
         lastErr = new Error(`OpenRouter ${res.status}: ${await res.text().catch(() => '')}`);
@@ -190,7 +208,17 @@ async function ask(system: string, user: string, maxRetries = 3): Promise<string
       }
       if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
       const data = await res.json();
-      return data.choices?.[0]?.message?.content ?? '';
+      const content = data.choices?.[0]?.message?.content ?? '';
+      // usage.prompt_tokens es lo que OpenRouter dice haber recibido de verdad: si es mucho
+      // menor al estimado de arriba, el prompt se truncó (límite de contexto del modelo).
+      console.log(
+        `ask: ${Date.now() - t0}ms usage real de OpenRouter = ${JSON.stringify(data.usage ?? {})} finish_reason=${data.choices?.[0]?.finish_reason}`,
+      );
+      if (looksLikeRefusal(content)) {
+        throw new Error(`respuesta del modelo parece un rechazo/petición de más info: "${content.slice(0, 150)}"`);
+      }
+      console.log(`ask: respuesta ok, ${content.length}chars, preview=${preview(content)}`);
+      return content;
     } catch (e) {
       lastErr = e;
       if (attempt === maxRetries) break;
@@ -214,6 +242,7 @@ export async function analyze(
     capped = true;
   }
 
+  console.log(`analyze: ${text.length}chars -> ${chunks.length} fragmento(s), capped=${capped}`);
   if (chunks.length <= 1) return ask(systemPrompt, text);
 
   const notes: string[] = [];
@@ -225,5 +254,6 @@ export async function analyze(
     'Notas de varios fragmentos del MISMO chat, en orden. Combínalas en un análisis final coherente:\n\n' +
     notes.join('\n\n') +
     (capped ? '\n\n(Nota: el chat era muy largo y se analizó una parte.)' : '');
+  console.log(`analyze: reduce final con ${notes.length} notas, ${reduceUser.length}chars`);
   return ask(systemPrompt, reduceUser);
 }
