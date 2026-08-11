@@ -7,7 +7,8 @@ export function chatsRouter() {
 
   r.get('/', async (req, res) => {
     try {
-      let sql = 'SELECT id, filename, person_id, area_id, analysis, created_at FROM chats WHERE 1=1';
+      let sql =
+        'SELECT id, filename, person_id, area_id, analysis, created_at, LENGTH(raw_text) AS char_count FROM chats WHERE 1=1';
       const params: unknown[] = [];
       if (req.query.person_id) {
         params.push(req.query.person_id);

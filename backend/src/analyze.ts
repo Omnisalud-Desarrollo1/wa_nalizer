@@ -1,6 +1,11 @@
 const {
   OPENROUTER_API_KEY,
   OPENROUTER_MODEL = 'openai/gpt-oss-20b:free',
+  GOOGLE_AI_API_KEY,
+  GOOGLE_AI_MODEL = 'gemini-2.5-flash',
+  DEEPSEEK_API_KEY,
+  DEEPSEEK_MODEL = 'deepseek-v4-flash',
+  DEEPSEEK_REASONING_EFFORT = 'low',
   CHUNK_CHARS = '40000',
   MAX_CHUNKS = '40',
 } = process.env;
@@ -177,57 +182,160 @@ function looksLikeRefusal(content: string): boolean {
 // ponytail: preview de una línea para poder eyeballear en logs qué se manda/recibe de verdad
 const preview = (s: string, n = 220) => JSON.stringify(s.slice(0, n).replace(/\s+/g, ' ').trim());
 
-async function ask(system: string, user: string, maxRetries = 3): Promise<string> {
+// ponytail: OpenRouter y DeepSeek hablan el mismo formato chat-completions estilo OpenAI, así que comparten esta implementación
+async function askChatCompletions(opts: {
+  label: string;
+  url: string;
+  apiKey: string | undefined;
+  model: string;
+  system: string;
+  user: string;
+  maxRetries: number;
+  extraBody?: Record<string, unknown>;
+}): Promise<string> {
+  const { label, url, apiKey, model, system, user, maxRetries, extraBody } = opts;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`ask: model=${OPENROUTER_MODEL} system=${system.length}chars user=${user.length}chars (intento ${attempt + 1})`);
-      console.log(`ask: system[0:220]=${preview(system)}`);
-      console.log(`ask: user[0:220]=${preview(user)}`);
+      console.log(`ask[${label}]: model=${model} system=${system.length}chars user=${user.length}chars (intento ${attempt + 1})`);
+      console.log(`ask[${label}]: system[0:220]=${preview(system)}`);
+      console.log(`ask[${label}]: user[0:220]=${preview(user)}`);
       const body = JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model,
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },
         ],
+        ...extraBody,
       });
-      console.log(`ask: body enviado = ${Buffer.byteLength(body)} bytes (estimado ~${Math.round((system.length + user.length) / 4)} tokens)`);
+      console.log(`ask[${label}]: body enviado = ${Buffer.byteLength(body)} bytes (estimado ~${Math.round((system.length + user.length) / 4)} tokens)`);
       const t0 = Date.now();
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body,
         signal: AbortSignal.timeout(180000), // ponytail: 120s abortaba modelos free lentos-pero-vivos, forzando un retry completo (doble espera)
       });
       if (res.status === 429 || res.status >= 500) {
-        lastErr = new Error(`OpenRouter ${res.status}: ${await res.text().catch(() => '')}`);
+        lastErr = new Error(`${label} ${res.status}: ${await res.text().catch(() => '')}`);
         throw lastErr;
       }
-      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new Error(`${label} ${res.status}: ${await res.text()}`);
       const data = await res.json();
       const content = data.choices?.[0]?.message?.content ?? '';
-      // usage.prompt_tokens es lo que OpenRouter dice haber recibido de verdad: si es mucho
+      // usage.prompt_tokens es lo que el proveedor dice haber recibido de verdad: si es mucho
       // menor al estimado de arriba, el prompt se truncó (límite de contexto del modelo).
       console.log(
-        `ask: ${Date.now() - t0}ms usage real de OpenRouter = ${JSON.stringify(data.usage ?? {})} finish_reason=${data.choices?.[0]?.finish_reason}`,
+        `ask[${label}]: ${Date.now() - t0}ms usage real = ${JSON.stringify(data.usage ?? {})} finish_reason=${data.choices?.[0]?.finish_reason}`,
       );
       if (looksLikeRefusal(content)) {
         throw new Error(`respuesta del modelo parece un rechazo/petición de más info: "${content.slice(0, 150)}"`);
       }
-      console.log(`ask: respuesta ok, ${content.length}chars, preview=${preview(content)}`);
+      console.log(`ask[${label}]: respuesta ok, ${content.length}chars, preview=${preview(content)}`);
       return content;
     } catch (e) {
       lastErr = e;
       if (attempt === maxRetries) break;
       const delay = Math.pow(2, attempt) * 1000;
-      console.error(`ask attempt ${attempt + 1} failed, retrying in ${delay}ms: ${(e as Error).message}`);
+      console.error(`ask[${label}] attempt ${attempt + 1} failed, retrying in ${delay}ms: ${(e as Error).message}`);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
   throw lastErr;
+}
+
+function askOpenRouter(system: string, user: string, maxRetries = 3): Promise<string> {
+  return askChatCompletions({
+    label: 'openrouter',
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    apiKey: OPENROUTER_API_KEY,
+    model: OPENROUTER_MODEL,
+    system,
+    user,
+    maxRetries,
+  });
+}
+
+function askDeepSeek(system: string, user: string, maxRetries = 3): Promise<string> {
+  return askChatCompletions({
+    label: 'deepseek',
+    url: 'https://api.deepseek.com/chat/completions',
+    apiKey: DEEPSEEK_API_KEY,
+    model: DEEPSEEK_MODEL,
+    system,
+    user,
+    maxRetries,
+    // ponytail: sin esto, deepseek-v4-flash entra en modo "thinking" agresivo y el reduce
+    // de un bulk de 5 chats tardó 149s con 11197 reasoning_tokens ocultos. low = razona menos, responde más rápido.
+    extraBody: { reasoning_effort: DEEPSEEK_REASONING_EFFORT },
+  });
+}
+
+// ponytail: fallback a la API gratuita de Google AI Studio (formato distinto a OpenAI/OpenRouter)
+async function askGemini(system: string, user: string, maxRetries = 2): Promise<string> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`ask[gemini]: model=${GOOGLE_AI_MODEL} system=${system.length}chars user=${user.length}chars (intento ${attempt + 1})`);
+      const t0 = Date.now();
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts: [{ text: user }] }],
+          }),
+          signal: AbortSignal.timeout(180000),
+        },
+      );
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error(`Gemini ${res.status}: ${await res.text().catch(() => '')}`);
+        throw lastErr;
+      }
+      if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      const content = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('') ?? '';
+      console.log(
+        `ask[gemini]: ${Date.now() - t0}ms usage=${JSON.stringify(data.usageMetadata ?? {})} finish_reason=${data.candidates?.[0]?.finishReason}`,
+      );
+      if (looksLikeRefusal(content)) {
+        throw new Error(`respuesta del modelo parece un rechazo/petición de más info: "${content.slice(0, 150)}"`);
+      }
+      console.log(`ask[gemini]: respuesta ok, ${content.length}chars, preview=${preview(content)}`);
+      return content;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === maxRetries) break;
+      const delay = Math.pow(2, attempt) * 1000;
+      console.error(`ask[gemini] attempt ${attempt + 1} failed, retrying in ${delay}ms: ${(e as Error).message}`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
+// Cadena de proveedores: DeepSeek (si hay key) -> Google AI Studio (si hay key) -> OpenRouter (última red).
+async function ask(system: string, user: string, maxRetries = 3): Promise<string> {
+  if (DEEPSEEK_API_KEY) {
+    try {
+      return await askDeepSeek(system, user, maxRetries);
+    } catch (e) {
+      console.error(`ask: DeepSeek falló (${(e as Error).message}), fallback a Google AI Studio/OpenRouter`);
+    }
+  }
+  if (GOOGLE_AI_API_KEY) {
+    try {
+      return await askGemini(system, user, maxRetries);
+    } catch (e) {
+      console.error(`ask: Google AI Studio falló (${(e as Error).message}), fallback a OpenRouter`);
+    }
+  }
+  return askOpenRouter(system, user, maxRetries);
 }
 
 export async function analyze(

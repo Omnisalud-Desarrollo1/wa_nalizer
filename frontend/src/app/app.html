@@ -131,7 +131,7 @@
 
         @if (selectedIds().size > 0) {
           <div class="bulk-bar">
-            <span>{{ selectedIds().size }} seleccionado(s)</span>
+            <span>{{ selectedIds().size }} seleccionado(s) · {{ selectedCharCount().toLocaleString('es') }} caracteres</span>
             <div style="display:flex;gap:.35rem">
               @if (selectedIds().size < chats().length) {
                 <button class="btn ghost small" (click)="selectAllChats()" [disabled]="bulkAnalyzing()">Seleccionar todos</button>
@@ -161,6 +161,7 @@
               }
             </div>
             <div class="actions">
+              <span class="info-icon" title="{{ c.char_count.toLocaleString('es') }} caracteres">ⓘ</span>
               @if (c.analysis) {
                 <span class="badge-analizado">ANALIZADO</span>
               }

@@ -21,6 +21,7 @@ interface Chat {
   area_id: number;
   analysis?: string;
   created_at: string;
+  char_count: number;
 }
 interface BulkAnalysis {
   id: number;
@@ -52,6 +53,11 @@ export class App {
   chats = signal<Chat[]>([]);
   selectedChat = signal<Chat | null>(null);
   selectedIds = signal<Set<number>>(new Set());
+  selectedCharCount = computed(() =>
+    this.chats()
+      .filter((c) => this.selectedIds().has(c.id))
+      .reduce((sum, c) => sum + (c.char_count ?? 0), 0),
+  );
   bulkList = signal<BulkAnalysis[]>([]);
   selectedBulk = signal<BulkAnalysis | null>(null);
   bulkAnalyzing = signal(false);

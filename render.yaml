@@ -10,6 +10,16 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        sync: false
+      - key: DEEPSEEK_REASONING_EFFORT
+        sync: false
+      - key: GOOGLE_AI_API_KEY
+        sync: false
+      - key: GOOGLE_AI_MODEL
+        sync: false
       - key: ALLOWED_ORIGIN
         sync: false
       - key: PORT
