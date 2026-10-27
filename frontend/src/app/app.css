@@ -174,7 +174,8 @@
   gap: .5rem;
   margin-bottom: 1rem;
 }
-.form-row input {
+.form-row input,
+.login input {
   flex: 1;
   padding: .65rem .75rem;
   border: 1px solid var(--border);
@@ -186,7 +187,8 @@
   background: var(--surface);
   color: var(--ink);
 }
-.form-row input:focus { border-color: var(--brand-soft); box-shadow: 0 0 0 3px var(--brand-wash); }
+.form-row input:focus,
+.login input:focus { border-color: var(--brand-soft); box-shadow: 0 0 0 3px var(--brand-wash); }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -479,3 +481,44 @@
   transition: transform .2s, background .2s;
 }
 .scroll-top:hover { transform: scale(1.1); background: var(--brand-soft); }
+
+/* ---------- login ---------- */
+.login {
+  max-width: 360px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.hero { position: relative; }
+.logout { position: absolute; top: 0; right: 0; }
+
+/* ---------- backend status ---------- */
+.backend-status {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: .4rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font-size: .75rem;
+  color: var(--ink-soft);
+}
+.backend-status small { color: var(--ink-faint); }
+.backend-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+.backend-status.up .dot { background: var(--success); }
+.backend-status.waking .dot,
+.backend-status.checking .dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.backend-status.down .dot { background: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }

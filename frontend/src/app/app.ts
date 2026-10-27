@@ -4,6 +4,7 @@ import { DatePipe } from '@angular/common';
 import { environment } from '../environments/environment';
 import { parseChat } from './chat-parser';
 import { markdownToHtml } from './markdown';
+import { authToken, setAuthToken } from './auth';
 
 interface Area {
   id: number;
@@ -44,6 +45,14 @@ const api = (path: string) => environment.backendUrl.replace(/\/$/, '') + path;
 })
 export class App {
   private http = inject(HttpClient);
+
+  loggedIn = computed(() => !!authToken());
+
+  // Estado del backend (Render free se duerme y tarda ~30-60s en arrancar)
+  backendStatus = signal<'checking' | 'up' | 'waking' | 'down'>('checking');
+  backendWaitSecs = signal(0);
+  loggingIn = signal(false);
+  loginError = signal('');
 
   view = signal<View>('areas');
   areas = signal<Area[]>([]);
@@ -574,6 +583,55 @@ export class App {
   /* ============ init ============ */
 
   ngOnInit() {
-    this.fetchAreas();
+    if (this.loggedIn()) this.fetchAreas();
+    this.watchBackend();
+  }
+
+  /* ============ backend status ============ */
+
+  // Ping a GET / (sin auth): cada 3s mientras no responde, cada 60s cuando está vivo.
+  private async watchBackend() {
+    let downSince = 0;
+    for (;;) {
+      let ok = false;
+      try {
+        ok = (await fetch(api('/'), { signal: AbortSignal.timeout(15000) })).ok;
+      } catch {}
+      const prev = this.backendStatus();
+      if (ok) {
+        downSince = 0;
+        this.backendStatus.set('up');
+        // si el primer fetch falló porque el servidor dormía, recarga ahora que despertó
+        if (prev !== 'up' && prev !== 'checking' && this.loggedIn() && this.view() === 'areas') {
+          this.error.set('');
+          this.fetchAreas();
+        }
+      } else {
+        downSince ||= Date.now();
+        this.backendWaitSecs.set(Math.round((Date.now() - downSince) / 1000));
+        this.backendStatus.set(prev === 'up' || prev === 'down' ? 'down' : 'waking');
+      }
+      await new Promise((r) => setTimeout(r, ok ? 60000 : 3000));
+    }
+  }
+
+  /* ============ auth ============ */
+
+  async login(username: string, password: string) {
+    this.loggingIn.set(true);
+    this.loginError.set('');
+    try {
+      const r = await this.http.post<{ token: string }>(api('/api/login'), { username, password }).toPromise();
+      setAuthToken(r!.token);
+      await this.goAreas();
+    } catch (e: any) {
+      this.loginError.set(e?.error?.error ?? 'No se pudo iniciar sesión');
+    } finally {
+      this.loggingIn.set(false);
+    }
+  }
+
+  logout() {
+    setAuthToken(null);
   }
 }

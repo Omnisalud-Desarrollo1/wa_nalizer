@@ -2,7 +2,21 @@
   <header class="hero">
     <h1>Wa-Nalizer</h1>
     <p>Gestiona áreas, personas y analiza conversaciones.</p>
+    @if (loggedIn()) {
+      <button class="btn ghost small logout" (click)="logout()">Cerrar sesión</button>
+    }
   </header>
+
+  @if (!loggedIn()) {
+    <form class="card login" (submit)="$event.preventDefault(); login(user.value, pass.value)">
+      <input #user type="text" placeholder="Usuario" autocomplete="username" required />
+      <input #pass type="password" placeholder="Contraseña" autocomplete="current-password" required />
+      <button class="btn primary" type="submit" [disabled]="loggingIn()">
+        {{ loggingIn() ? 'Entrando…' : 'Entrar' }}
+      </button>
+      @if (loginError()) { <p class="error">{{ loginError() }}</p> }
+    </form>
+  } @else {
 
   <nav class="breadcrumb">
     @if (view() === 'areas') {
@@ -293,6 +307,8 @@
     }
   }
 
+  }
+
   <!-- ============ confirm modal ============ -->
   @if (confirmAction(); as c) {
     <div class="modal-overlay" (click)="cancelConfirm()">
@@ -305,6 +321,17 @@
       </div>
     </div>
   }
+
+  <!-- ============ backend status ============ -->
+  <div class="backend-status" [class]="backendStatus()" role="status">
+    <span class="dot"></span>
+    @switch (backendStatus()) {
+      @case ('checking') { Conectando con el servidor… }
+      @case ('up') { Servidor activo }
+      @case ('waking') { Arrancando servidor… {{ backendWaitSecs() }}s <small>(puede tardar ~1 min)</small> }
+      @case ('down') { Servidor sin conexión, reintentando… {{ backendWaitSecs() }}s }
+    }
+  </div>
 
   <!-- ============ scroll top ============ -->
   @if (showScrollTop()) {

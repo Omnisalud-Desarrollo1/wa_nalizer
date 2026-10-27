@@ -22,6 +22,12 @@ services:
         sync: false
       - key: GOOGLE_AI_MODEL
         sync: false
+      - key: APP_USERNAME
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
       - key: ALLOWED_ORIGIN
         sync: false
       - key: PORT

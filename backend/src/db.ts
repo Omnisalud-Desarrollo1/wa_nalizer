@@ -16,12 +16,8 @@ const pool = new pg.Pool({
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-});
-
-// Las tablas viven en DB_SCHEMA (no en public, que Supabase expone por la Data API y exige RLS).
-// Requiere el pooler en modo session (puerto 5432): en modo transaction (6543) el SET no persiste.
-pool.on('connect', (client) => {
-  client.query(`SET search_path TO ${pg.escapeIdentifier(DB_SCHEMA)}`).catch((e) => console.error('search_path:', e.message));
+  // Las tablas viven en DB_SCHEMA (no en public, que Supabase expone por la Data API y exige RLS).
+  options: `-c search_path=${DB_SCHEMA}`,
 });
 
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);

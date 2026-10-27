@@ -3,6 +3,7 @@ import cors from 'cors';
 import { areasRouter } from './routes/areas.js';
 import { peopleRouter } from './routes/people.js';
 import { chatsRouter } from './routes/chats.js';
+import { login, requireAuth } from './auth.js';
 
 const { ALLOWED_ORIGIN = '*', PORT = '3000' } = process.env;
 
@@ -11,6 +12,9 @@ app.use(cors({ origin: ALLOWED_ORIGIN }));
 app.use(express.json({ limit: '25mb' }));
 
 app.get('/', (_req, res) => res.json({ ok: true }));
+
+app.post('/api/login', login);
+app.use('/api', requireAuth);
 
 app.use('/api/areas', areasRouter());
 app.use('/api/areas/:areaId/people', peopleRouter());
