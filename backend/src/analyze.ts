@@ -1,6 +1,7 @@
 const {
   OPENROUTER_API_KEY,
-  OPENROUTER_MODEL = 'openai/gpt-oss-20b:free',
+  OPENROUTER_MODEL = 'anthropic/claude-haiku-5.5',
+  OPENROUTER_REASONING_EFFORT = 'high',
   GOOGLE_AI_API_KEY,
   GOOGLE_AI_MODEL = 'gemini-2.5-flash',
   DEEPSEEK_API_KEY,
@@ -256,6 +257,7 @@ function askOpenRouter(system: string, user: string, maxRetries = 3): Promise<st
     system,
     user,
     maxRetries,
+    extraBody: { reasoning: { effort: OPENROUTER_REASONING_EFFORT } },
   });
 }
 
@@ -319,23 +321,24 @@ async function askGemini(system: string, user: string, maxRetries = 2): Promise<
   throw lastErr;
 }
 
-// Cadena de proveedores: DeepSeek (si hay key) -> Google AI Studio (si hay key) -> OpenRouter (última red).
+// Cadena de proveedores: OpenRouter (principal) -> DeepSeek -> Google AI Studio. Cada uno solo si tiene key.
 async function ask(system: string, user: string, maxRetries = 3): Promise<string> {
-  if (DEEPSEEK_API_KEY) {
+  const providers: [string, string | undefined, () => Promise<string>][] = [
+    ['OpenRouter', OPENROUTER_API_KEY, () => askOpenRouter(system, user, maxRetries)],
+    ['DeepSeek', DEEPSEEK_API_KEY, () => askDeepSeek(system, user, maxRetries)],
+    ['Google AI Studio', GOOGLE_AI_API_KEY, () => askGemini(system, user, maxRetries)],
+  ];
+  let lastErr: unknown = new Error('No hay ningún proveedor de IA configurado (OPENROUTER_API_KEY, DEEPSEEK_API_KEY o GOOGLE_AI_API_KEY)');
+  for (const [name, key, call] of providers) {
+    if (!key) continue;
     try {
-      return await askDeepSeek(system, user, maxRetries);
+      return await call();
     } catch (e) {
-      console.error(`ask: DeepSeek falló (${(e as Error).message}), fallback a Google AI Studio/OpenRouter`);
+      lastErr = e;
+      console.error(`ask: ${name} falló (${(e as Error).message}), probando siguiente proveedor`);
     }
   }
-  if (GOOGLE_AI_API_KEY) {
-    try {
-      return await askGemini(system, user, maxRetries);
-    } catch (e) {
-      console.error(`ask: Google AI Studio falló (${(e as Error).message}), fallback a OpenRouter`);
-    }
-  }
-  return askOpenRouter(system, user, maxRetries);
+  throw lastErr;
 }
 
 export async function analyze(

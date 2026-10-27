@@ -10,6 +10,8 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         sync: false
+      - key: OPENROUTER_REASONING_EFFORT
+        sync: false
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: DEEPSEEK_MODEL
@@ -33,4 +35,6 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: DB_NAME
+        sync: false
+      - key: DB_SCHEMA
         sync: false
