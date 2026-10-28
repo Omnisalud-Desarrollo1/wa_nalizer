@@ -33,6 +33,7 @@
     }
     @if (loading()) { <p class="list-empty"><span class="spinner dark"></span></p> }
 
+    @if (isRoot()) {
     <details class="paste-box">
       <summary>Prompt por defecto de los grupos</summary>
       <p class="hint">
@@ -45,6 +46,7 @@
       <textarea #defMap class="group-textarea prompt" rows="8" [value]="defaultPrompts().map"></textarea>
       <button class="btn primary small" (click)="saveDefaultPrompts(defSys.value, defMap.value)">Guardar prompt por defecto</button>
     </details>
+    }
 
     @if (error()) { <p class="error">{{ error() }}</p> }
     @if (success()) { <p class="success">{{ success() }}</p> }
@@ -100,10 +102,12 @@
     }
 
     @if (tab() === 'config') {
+      @if (isRoot()) {
       <h3 class="group-h">Propósito del grupo</h3>
       <p class="hint">Se le indica a la IA para ajustar la evaluación (ej. soporte postventa, servicio al cliente).</p>
       <textarea #ctx class="group-textarea" rows="3" [value]="company.context"
         (blur)="ctx.value !== company.context && saveCompany({ context: ctx.value })"></textarea>
+      }
 
       <h3 class="group-h">Directorio del cliente ({{ contacts().length }})</h3>
       <p class="hint">
@@ -155,6 +159,7 @@
         }
       </details>
 
+      @if (isRoot()) {
       <h3 class="group-h">
         Prompts de análisis
         <span class="chip" [class.client]="hasCustomPrompt()" [class.team]="!hasCustomPrompt()">
@@ -184,6 +189,7 @@
         <input #rename [value]="company.name" />
         <button class="btn ghost small" (click)="saveCompany({ name: rename.value })">Renombrar grupo</button>
       </div>
+      }
     }
 
     @if (error()) { <p class="error">{{ error() }}</p> }
@@ -234,17 +240,28 @@
         </div>
       } @else if (chatMode() === 'participants') {
         <p class="hint">
-          Así se clasificó a cada remitente. Si alguien del cliente aparece como equipo, agrégalo al directorio y vuelve a analizar.
+          Así se clasificó a cada remitente. Si alguno quedó en el lado equivocado, muévelo: la corrección se guarda para
+          todos los chats de {{ company.name }}. Después vuelve a analizar.
         </p>
         <div class="participants">
-          <div>
-            <h3 class="group-h">Cliente ({{ participants().client.length }})</h3>
-            @for (p of participants().client; track p.label) { <span class="chip client">{{ p.label }}</span> }
-          </div>
-          <div>
-            <h3 class="group-h">Nuestro equipo — se evalúa ({{ participants().team.length }})</h3>
-            @for (p of participants().team; track p.label) { <span class="chip team">{{ p.label }}</span> }
-          </div>
+          @for (col of participantColumns(); track col.title) {
+            <div>
+              <h3 class="group-h">{{ col.title }} ({{ col.list.length }})</h3>
+              @for (p of col.list; track p.key) {
+                <div class="sender-row" [class.client]="p.side === 'client'" [class.team]="p.side === 'team'">
+                  <div class="sender-info">
+                    <span class="sender-name">{{ p.label }}</span>
+                    <span class="sender-reason">{{ reasons[p.reason] }}</span>
+                  </div>
+                  @if (p.reason === 'manual') {
+                    <button class="btn ghost small" title="Volver a la clasificación automática"
+                      (click)="setSenderSide(p.key, null)">Auto</button>
+                  }
+                  <button class="btn ghost small" (click)="setSenderSide(p.key, col.move)">{{ col.moveLabel }}</button>
+                </div>
+              }
+            </div>
+          }
         </div>
       } @else {
         @if (analyzing()) {

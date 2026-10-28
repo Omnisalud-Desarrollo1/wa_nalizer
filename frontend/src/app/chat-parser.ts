@@ -13,7 +13,7 @@ export interface Message {
 //   2024-01-01, 10:30 - Sender: msg
 // Generic: starts with a date-like pattern, has time, then separator
 const HEADER_RE = /^[\[\(]?[\d\/\-.,\s]+[\d:]{4,}[apmAPM.\s]*[\])]?\s*[-–—]\s*(.+)$/;
-const BRACKET_RE = /^\[[\d\/\-.,\s]+\d{1,2}:\d{2}:\d{2}[,\s]*\]\s*(.+)$/;
+const BRACKET_RE = /^\u200e?\[[\d\/\-.,\s]+\d{1,2}:\d{2}(?::\d{2})?[\s\u202f\u00a0]*(?:[aApP]\.?\s*[mM]\.?)?\]\s*(.+)$/;
 const TIME_RE = /(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[aApP]\s*\.?\s*[mM]\s*\.?)?)/;
 
 function extractTime(line: string): string {

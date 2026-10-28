@@ -26,6 +26,10 @@ services:
         sync: false
       - key: APP_PASSWORD
         sync: false
+      - key: ROOT_USERNAME
+        sync: false
+      - key: ROOT_PASSWORD
+        sync: false
       - key: AUTH_SECRET
         sync: false
       - key: ALLOWED_ORIGIN

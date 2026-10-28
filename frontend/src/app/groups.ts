@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 import { parseChat } from './chat-parser';
 import { markdownToHtml } from './markdown';
+import { authRole } from './auth';
 
 interface Company {
   id: number;
@@ -28,10 +29,23 @@ interface GroupChat {
   created_at: string;
   char_count: number;
 }
+type Side = 'client' | 'team';
 interface SenderInfo {
-  side: 'client' | 'team';
+  side: Side;
   label: string;
+  reason: 'manual' | 'phone' | 'name' | 'company' | 'default';
 }
+
+// Misma clave que senderKey() del backend: el export envuelve números en marcas de dirección invisibles.
+const senderKey = (s: string) => s.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim();
+
+export const REASONS: Record<SenderInfo['reason'], string> = {
+  manual: 'corregido a mano',
+  phone: 'teléfono del directorio',
+  name: 'nombre del directorio',
+  company: 'contiene el nombre de la empresa',
+  default: 'no está en el directorio',
+};
 interface GroupChatDetail {
   raw_text: string;
   analysis: string | null;
@@ -73,6 +87,8 @@ function parseContactTable(text: string): NewContact[] {
 export class Groups {
   private http = inject(HttpClient);
 
+  isRoot = computed(() => authRole() === 'root');
+
   confirm = input.required<(message: string, fn: () => void) => void>();
 
   companies = signal<Company[]>([]);
@@ -96,15 +112,26 @@ export class Groups {
   messages = computed(() => {
     const d = this.chatDetail();
     if (!d) return [];
-    return parseChat(d.raw_text, (sender) => d.senders[sender]?.side === 'team').map((m) => ({
+    return parseChat(d.raw_text, (sender) => d.senders[senderKey(sender)]?.side === 'team').map((m) => ({
       ...m,
-      sender: d.senders[m.sender]?.label ?? m.sender,
+      sender: d.senders[senderKey(m.sender)]?.label ?? m.sender,
     }));
   });
-  participants = computed(() => {
-    const all = Object.values(this.chatDetail()?.senders ?? {});
-    return { client: all.filter((s) => s.side === 'client'), team: all.filter((s) => s.side === 'team') };
+  participantColumns = computed(() => {
+    const all = Object.entries(this.chatDetail()?.senders ?? {}).map(([key, info]) => ({ key, ...info }));
+    const column = (side: Side, title: string, move: Side, moveLabel: string) => ({
+      title,
+      list: all.filter((s) => s.side === side),
+      move,
+      moveLabel,
+    });
+    return [
+      column('client', 'Cliente', 'team', '→ Equipo'),
+      column('team', 'Nuestro equipo — se evalúa', 'client', '→ Cliente'),
+    ];
   });
+
+  readonly reasons = REASONS;
 
   pendingFiles = signal<{ name: string; text: string }[]>([]);
   pastePreview = signal<NewContact[]>([]);
@@ -118,7 +145,7 @@ export class Groups {
 
   ngOnInit() {
     this.fetchCompanies();
-    this.fetchDefaultPrompts();
+    if (this.isRoot()) this.fetchDefaultPrompts();
   }
 
   private async run(fallback: string, fn: () => Promise<unknown>) {
@@ -322,6 +349,18 @@ export class Groups {
       this.chatDetail.set(
         await firstValueFrom(this.http.get<GroupChatDetail>(api(`/api/companies/${id}/chats/${chat.id}`))),
       );
+    });
+  }
+
+  // Corrige a mano el lado de un remitente (null = volver a la clasificación automática) y recarga la vista.
+  async setSenderSide(key: string, side: Side | null) {
+    const id = this.selected()?.id;
+    const chat = this.openChat();
+    if (!id || !chat) return;
+    await this.run('Error al guardar la corrección', async () => {
+      await firstValueFrom(this.http.put(api(`/api/companies/${id}/senders`), { sender: key, side }));
+      const detail = await firstValueFrom(this.http.get<GroupChatDetail>(api(`/api/companies/${id}/chats/${chat.id}`)));
+      this.chatDetail.set(detail);
     });
   }
 

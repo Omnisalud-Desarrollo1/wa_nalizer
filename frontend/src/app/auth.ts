@@ -1,10 +1,13 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
-import { signal } from '@angular/core';
+import { computed, signal } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 
 const KEY = 'wa_nalizer_token';
 
 export const authToken = signal<string | null>(localStorage.getItem(KEY));
+
+// El rol viaja en claro en el token ("<exp>.<rol>.<firma>"); solo decide qué se muestra, el backend lo valida.
+export const authRole = computed(() => authToken()?.split('.')[1] ?? null);
 
 export function setAuthToken(token: string | null) {
   if (token) localStorage.setItem(KEY, token);

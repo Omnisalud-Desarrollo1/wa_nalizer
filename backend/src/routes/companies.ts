@@ -1,7 +1,8 @@
 import { Router, type Response } from 'express';
 import { query } from '../db.js';
 import { analyze } from '../analyze.js';
-import { detectSenders, groupPrompts, labelGroupChat, type Contact } from '../groups.js';
+import { detectSenders, groupPrompts, labelGroupChat, senderKey, type Contact, type Directory, type Side } from '../groups.js';
+import { requireRoot } from '../auth.js';
 
 function fail(res: Response, e: unknown) {
   const duplicate = e instanceof Error && 'code' in e && e.code === '23505';
@@ -10,6 +11,15 @@ function fail(res: Response, e: unknown) {
 
 const loadContacts = async (companyId: string | number): Promise<Contact[]> =>
   (await query('SELECT name, role, phone FROM company_contacts WHERE company_id = $1 ORDER BY name', [companyId])).rows;
+
+async function loadDirectory(companyId: string | number, company: string): Promise<Directory> {
+  const [contacts, senders] = await Promise.all([
+    loadContacts(companyId),
+    query('SELECT sender, side FROM company_senders WHERE company_id = $1', [companyId]),
+  ]);
+  const overrides: Record<string, Side> = Object.fromEntries(senders.rows.map((r) => [r.sender, r.side]));
+  return { company, contacts, overrides };
+}
 
 async function loadDefaultPrompts(): Promise<{ system: string; map: string }> {
   const { rows } = await query(
@@ -24,7 +34,7 @@ export function companiesRouter() {
 
   /* ---- prompt por defecto de grupos (tabla settings) ---- */
 
-  r.get('/prompts', async (_req, res) => {
+  r.get('/prompts', requireRoot, async (_req, res) => {
     try {
       res.json(await loadDefaultPrompts());
     } catch (e) {
@@ -32,7 +42,7 @@ export function companiesRouter() {
     }
   });
 
-  r.put('/prompts', async (req, res) => {
+  r.put('/prompts', requireRoot, async (req, res) => {
     const system = String(req.body?.system ?? '').trim();
     const map = String(req.body?.map ?? '').trim();
     if (!system || !map) return res.status(400).json({ error: 'los dos prompts son requeridos' });
@@ -78,8 +88,8 @@ export function companiesRouter() {
     }
   });
 
-  // Solo actualiza los campos presentes. system_prompt/map_prompt vacíos o null = volver al prompt por defecto.
-  r.patch('/:id', async (req, res) => {
+  // Solo root. Actualiza los campos presentes. system_prompt/map_prompt vacíos o null = volver al prompt por defecto.
+  r.patch('/:id', requireRoot, async (req, res) => {
     const body = req.body ?? {};
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -176,6 +186,31 @@ export function companiesRouter() {
     }
   });
 
+  /* ---- corrección manual de remitentes ---- */
+
+  // side 'client' | 'team' fija el lado; null lo devuelve a la clasificación automática.
+  r.put('/:id/senders', async (req, res) => {
+    const sender = senderKey(String(req.body?.sender ?? ''));
+    const side = req.body?.side ?? null;
+    if (!sender || (side !== null && side !== 'client' && side !== 'team')) {
+      return res.status(400).json({ error: "sender requerido y side debe ser 'client', 'team' o null" });
+    }
+    try {
+      if (side === null) {
+        await query('DELETE FROM company_senders WHERE company_id = $1 AND sender = $2', [req.params.id, sender]);
+      } else {
+        await query(
+          `INSERT INTO company_senders (company_id, sender, side) VALUES ($1, $2, $3)
+           ON CONFLICT (company_id, sender) DO UPDATE SET side = EXCLUDED.side`,
+          [req.params.id, sender, side],
+        );
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      fail(res, e);
+    }
+  });
+
   /* ---- chats de grupo ---- */
 
   r.get('/:id/chats', async (req, res) => {
@@ -208,12 +243,14 @@ export function companiesRouter() {
   // Incluye la clasificación de remitentes (cliente/equipo) para que la UI la muestre sin duplicar la lógica.
   r.get('/:id/chats/:chatId', async (req, res) => {
     try {
-      const { rows } = await query('SELECT * FROM group_chats WHERE id = $1 AND company_id = $2', [
-        req.params.chatId,
-        req.params.id,
-      ]);
+      const { rows } = await query(
+        `SELECT g.*, c.name AS company_name FROM group_chats g JOIN companies c ON c.id = g.company_id
+         WHERE g.id = $1 AND g.company_id = $2`,
+        [req.params.chatId, req.params.id],
+      );
       if (!rows[0]) return res.status(404).json({ error: 'chat no encontrado' });
-      res.json({ ...rows[0], senders: detectSenders(rows[0].raw_text, await loadContacts(req.params.id)) });
+      const { company_name, ...chat } = rows[0];
+      res.json({ ...chat, senders: detectSenders(chat.raw_text, await loadDirectory(req.params.id, company_name)) });
     } catch (e) {
       fail(res, e);
     }
@@ -258,13 +295,14 @@ export function companiesRouter() {
       if (!base.system || !base.map) {
         return res.status(500).json({ error: 'Falta el prompt de grupos: configúralo en Grupos empresariales › Prompt por defecto' });
       }
-      const contacts = await loadContacts(req.params.id);
-      const prompts = groupPrompts(base, name, context, contacts);
+      const directory = await loadDirectory(req.params.id, name);
+      const prompts = groupPrompts(base, name, context, directory.contacts);
       console.log(
-        `analyze group chat=${id} company=${name} contacts=${contacts.length} ` +
+        `analyze group chat=${id} company=${name} contacts=${directory.contacts.length} ` +
+          `overrides=${Object.keys(directory.overrides).length} ` +
           `customSystem=${system_prompt !== null} customMap=${map_prompt !== null}`,
       );
-      const analysis = await analyze(labelGroupChat(raw_text, contacts), prompts.system, prompts.map);
+      const analysis = await analyze(labelGroupChat(raw_text, directory), prompts.system, prompts.map);
       await query('UPDATE group_chats SET analysis = $1 WHERE id = $2', [analysis, id]);
       res.json({ analysis });
     } catch (e) {
