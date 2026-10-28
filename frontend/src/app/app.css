@@ -522,3 +522,17 @@
 .backend-status.checking .dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
 .backend-status.down .dot { background: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
+
+/* ---------- section tabs ---------- */
+.section-tabs { display: flex; gap: .35rem; margin-bottom: 1rem; }
+.section-tabs .tab {
+  padding: .45rem .9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: .85rem;
+  cursor: pointer;
+}
+.section-tabs .tab.active { background: var(--brand); border-color: var(--brand); color: #f5f5f5; }

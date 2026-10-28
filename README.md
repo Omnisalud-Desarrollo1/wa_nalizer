@@ -29,7 +29,9 @@ npm start                 # http://localhost:4200
 Nuevo **Web Service** desde el repo, root `backend/`:
 - Build: `npm install`
 - Start: `npm start`
-- Env vars: `OPENROUTER_API_KEY` (y opcional `OPENROUTER_MODEL`, `ALLOWED_ORIGIN` con tu dominio de Vercel, `CHUNK_CHARS`, `MAX_CHUNKS`).
+- Env vars: `OPENROUTER_API_KEY` (y opcional `OPENROUTER_MODEL`, `OPENROUTER_REASONING_EFFORT`), `APP_USERNAME`, `APP_PASSWORD`, `AUTH_SECRET`, `DB_*` + `DB_SCHEMA` (default `wa_nalizer`), `ALLOWED_ORIGIN` con tu dominio de Vercel, `CHUNK_CHARS`, `MAX_CHUNKS`.
+- Base de datos: ejecutar en orden los `.sql` de `backend/migrations/` en el SQL Editor de Supabase (`004` mueve las tablas al schema `wa_nalizer`, `005` crea los grupos empresariales).
+- En OpenRouter, el guardrail "Sensitive Info" del workspace debe estar desactivado: si redacta nombres y teléfonos, la IA no puede saber quién escribe cada mensaje.
 
 ## Deploy frontend (Vercel)
 

@@ -17,7 +17,14 @@
       @if (loginError()) { <p class="error">{{ loginError() }}</p> }
     </form>
   } @else {
+  <div class="section-tabs">
+    <button class="tab" [class.active]="section() === 'areas'" (click)="section.set('areas')">Áreas</button>
+    <button class="tab" [class.active]="section() === 'groups'" (click)="section.set('groups')">Grupos empresariales</button>
+  </div>
 
+  @if (section() === 'groups') {
+    <app-groups [confirm]="confirmFn" />
+  } @else {
   <nav class="breadcrumb">
     @if (view() === 'areas') {
       <span class="current">Áreas</span>
@@ -305,6 +312,7 @@
         @if (error()) { <p class="error">{{ error() }}</p> }
       </section>
     }
+  }
   }
 
   }

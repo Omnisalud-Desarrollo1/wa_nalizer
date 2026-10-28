@@ -5,6 +5,7 @@ import { environment } from '../environments/environment';
 import { parseChat } from './chat-parser';
 import { markdownToHtml } from './markdown';
 import { authToken, setAuthToken } from './auth';
+import { Groups } from './groups';
 
 interface Area {
   id: number;
@@ -39,7 +40,7 @@ const api = (path: string) => environment.backendUrl.replace(/\/$/, '') + path;
 
 @Component({
   selector: 'app-root',
-  imports: [DatePipe],
+  imports: [DatePipe, Groups],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -54,6 +55,7 @@ export class App {
   loggingIn = signal(false);
   loginError = signal('');
 
+  section = signal<'areas' | 'groups'>('areas');
   view = signal<View>('areas');
   areas = signal<Area[]>([]);
   selectedArea = signal<Area | null>(null);
@@ -90,8 +92,8 @@ export class App {
   chatMode = signal<'chat' | 'analysis' | 'advisor'>('chat');
   messages = computed(() => {
     const raw = this.chatRaw();
-    const me = this.selectedPerson()?.name ?? '';
-    return raw && me ? parseChat(raw, me) : [];
+    const me = this.selectedPerson()?.name.toLowerCase() ?? '';
+    return raw && me ? parseChat(raw, (sender) => sender.toLowerCase().includes(me)) : [];
   });
 
   fileNames = signal<string[]>([]);
@@ -121,6 +123,8 @@ export class App {
   confirm(message: string, fn: () => void) {
     this.confirmAction.set({ message, fn });
   }
+
+  readonly confirmFn = (message: string, fn: () => void) => this.confirm(message, fn);
 
   cancelConfirm() {
     this.confirmAction.set(null);
@@ -602,7 +606,7 @@ export class App {
         downSince = 0;
         this.backendStatus.set('up');
         // si el primer fetch falló porque el servidor dormía, recarga ahora que despertó
-        if (prev !== 'up' && prev !== 'checking' && this.loggedIn() && this.view() === 'areas') {
+        if (prev !== 'up' && prev !== 'checking' && this.loggedIn() && this.section() === 'areas' && this.view() === 'areas') {
           this.error.set('');
           this.fetchAreas();
         }

@@ -1,0 +1,258 @@
+<nav class="breadcrumb">
+  @if (selected(); as c) {
+    <button (click)="back()">Grupos empresariales</button>
+    <span class="sep">›</span>
+    <span class="current">{{ c.name }}</span>
+  } @else {
+    <span class="current">Grupos empresariales</span>
+  }
+</nav>
+
+<!-- ============ lista de empresas ============ -->
+@if (!selected()) {
+  <section class="card">
+    <div class="form-row">
+      <input #companyInput type="text" placeholder="Nuevo grupo empresarial (ej. Isimo)"
+        (keyup.enter)="addCompany(companyInput)" />
+      <button class="btn primary" style="width:auto" (click)="addCompany(companyInput)">+ Crear</button>
+    </div>
+
+    @if (companies().length === 0 && !loading()) {
+      <p class="list-empty">No hay grupos empresariales. Crea el primero.</p>
+    }
+    @for (c of companies(); track c.id) {
+      <div class="list-item" (click)="selectCompany(c)">
+        <div style="flex:1;min-width:0">
+          <div class="name">{{ c.name }}</div>
+          <div class="meta">{{ c.contact_count }} contactos · {{ c.chat_count }} chats</div>
+        </div>
+        <div class="actions">
+          <button class="btn danger small" (click)="deleteCompany(c, $event)">Eliminar</button>
+        </div>
+      </div>
+    }
+    @if (loading()) { <p class="list-empty"><span class="spinner dark"></span></p> }
+
+    <details class="paste-box">
+      <summary>Prompt por defecto de los grupos</summary>
+      <p class="hint">
+        Lo usan todos los grupos que no tengan un prompt propio. El contexto de cada grupo (empresa, propósito, directorio
+        y quién es cliente o equipo) se agrega automáticamente al final.
+      </p>
+      <label class="prompt-label">Prompt de análisis (evaluación final)</label>
+      <textarea #defSys class="group-textarea prompt" rows="14" [value]="defaultPrompts().system"></textarea>
+      <label class="prompt-label">Prompt por fragmento (chats largos)</label>
+      <textarea #defMap class="group-textarea prompt" rows="8" [value]="defaultPrompts().map"></textarea>
+      <button class="btn primary small" (click)="saveDefaultPrompts(defSys.value, defMap.value)">Guardar prompt por defecto</button>
+    </details>
+
+    @if (error()) { <p class="error">{{ error() }}</p> }
+    @if (success()) { <p class="success">{{ success() }}</p> }
+  </section>
+}
+
+<!-- ============ detalle de empresa ============ -->
+@if (selected(); as company) {
+  <section class="card">
+    <div class="chat-tabs">
+      <button class="tab" [class.active]="tab() === 'chats'" (click)="tab.set('chats')">Chats ({{ chats().length }})</button>
+      <button class="tab" [class.active]="tab() === 'config'" (click)="tab.set('config')">Configuración</button>
+    </div>
+
+    @if (tab() === 'chats') {
+      <label class="drop" [class.filled]="pendingFiles().length > 0"
+        (dragover)="$event.preventDefault()" (drop)="$event.preventDefault(); addFiles($event.dataTransfer?.files)">
+        <input #fileInput type="file" accept=".txt,text/plain" multiple hidden
+          (change)="addFiles(fileInput.files); fileInput.value = ''" />
+        <span class="drop-icon">📄</span>
+        @if (pendingFiles().length === 0) {
+          <span class="drop-text">Selecciona o arrastra el .txt exportado del grupo</span>
+        } @else {
+          <span class="drop-text">{{ pendingFiles().length }} archivo(s) seleccionado(s)</span>
+          <div class="file-list">
+            @for (f of pendingFiles(); track $index) { <span class="file-chip">{{ f.name }}</span> }
+          </div>
+        }
+      </label>
+      @if (pendingFiles().length > 0) {
+        <div style="display:flex;gap:.35rem;margin-bottom:.75rem">
+          <button class="btn ghost small" (click)="pendingFiles.set([])">Limpiar</button>
+          <button class="btn primary" (click)="importChats()" [disabled]="uploading()">
+            @if (uploading()) { <span class="spinner"></span> Subiendo… } @else { Importar {{ pendingFiles().length }} chat(s) }
+          </button>
+        </div>
+      }
+
+      @for (g of chats(); track g.id) {
+        <div class="list-item" (click)="showChat(g)">
+          <div style="flex:1;min-width:0">
+            <div class="name">{{ g.filename }}</div>
+            <div class="meta">{{ g.created_at | date:'short' }} · {{ g.char_count.toLocaleString('es') }} caracteres</div>
+          </div>
+          <div class="actions">
+            @if (g.analyzed) { <span class="badge-analizado">ANALIZADO</span> }
+            <button class="btn ghost small icon-only" title="Eliminar" (click)="deleteChat(g, $event)">✕</button>
+          </div>
+        </div>
+      } @empty {
+        @if (!loading()) { <p class="list-empty">No hay chats de grupo importados aún.</p> }
+      }
+    }
+
+    @if (tab() === 'config') {
+      <h3 class="group-h">Propósito del grupo</h3>
+      <p class="hint">Se le indica a la IA para ajustar la evaluación (ej. soporte postventa, servicio al cliente).</p>
+      <textarea #ctx class="group-textarea" rows="3" [value]="company.context"
+        (blur)="ctx.value !== company.context && saveCompany({ context: ctx.value })"></textarea>
+
+      <h3 class="group-h">Directorio del cliente ({{ contacts().length }})</h3>
+      <p class="hint">
+        Personas de {{ company.name }} en el grupo. Quien no esté aquí se considera de nuestro equipo y es a quien se evalúa.
+      </p>
+
+      <table class="contacts">
+        <thead><tr><th>Nombre</th><th>Cargo / Detalle</th><th>Teléfono</th><th></th></tr></thead>
+        <tbody>
+          @for (c of contacts(); track c.id) {
+            @if (editingContactId() === c.id) {
+              <tr>
+                <td><input #en [value]="c.name" /></td>
+                <td><input #er [value]="c.role" /></td>
+                <td><input #ep [value]="c.phone" (keyup.enter)="saveContact(c, en.value, er.value, ep.value)" /></td>
+                <td class="row-actions">
+                  <button class="btn primary small" (click)="saveContact(c, en.value, er.value, ep.value)">Guardar</button>
+                  <button class="btn ghost small" (click)="editingContactId.set(null)">✕</button>
+                </td>
+              </tr>
+            } @else {
+              <tr>
+                <td>{{ c.name }}</td>
+                <td>{{ c.role }}</td>
+                <td class="mono">{{ c.phone }}</td>
+                <td class="row-actions">
+                  <button class="btn ghost small icon-only" title="Editar" (click)="editingContactId.set(c.id)">✎</button>
+                  <button class="btn ghost small icon-only" title="Quitar" (click)="deleteContact(c)">✕</button>
+                </td>
+              </tr>
+            }
+          }
+          <tr class="new-row">
+            <td><input #nn placeholder="Nombre" /></td>
+            <td><input #nr placeholder="Cargo" /></td>
+            <td><input #np placeholder="Teléfono" (keyup.enter)="addContact(nn, nr, np)" /></td>
+            <td class="row-actions"><button class="btn primary small" (click)="addContact(nn, nr, np)">+ Agregar</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <details class="paste-box">
+        <summary>Pegar lista desde Excel / Sheets</summary>
+        <p class="hint">Columnas: Nombre, Cargo, Teléfono. Si el teléfono ya existe, se actualiza nombre y cargo.</p>
+        <textarea #paste class="group-textarea" rows="6" (input)="previewPaste(paste.value)"
+          placeholder="Wendy Echavarria&#9;Líder&#9;3142619410"></textarea>
+        @if (pastePreview().length > 0) {
+          <button class="btn primary small" (click)="importPaste(paste)">Agregar {{ pastePreview().length }} contacto(s)</button>
+        }
+      </details>
+
+      <h3 class="group-h">
+        Prompts de análisis
+        <span class="chip" [class.client]="hasCustomPrompt()" [class.team]="!hasCustomPrompt()">
+          {{ hasCustomPrompt() ? 'Personalizado para ' + company.name : 'Usa el prompt por defecto' }}
+        </span>
+      </h3>
+      <p class="hint">
+        Al guardar aquí, {{ company.name }} usará su propio prompt. El contexto (propósito, directorio y quién es cliente
+        o equipo) se agrega automáticamente al final.
+      </p>
+      <label class="prompt-label">Prompt de análisis (evaluación final)</label>
+      <textarea #cSys class="group-textarea prompt" rows="14"
+        [value]="company.system_prompt ?? defaultPrompts().system"></textarea>
+      <label class="prompt-label">Prompt por fragmento (chats largos)</label>
+      <textarea #cMap class="group-textarea prompt" rows="8"
+        [value]="company.map_prompt ?? defaultPrompts().map"></textarea>
+      <div style="display:flex;gap:.35rem;margin-top:.5rem">
+        <button class="btn primary small" (click)="saveCompanyPrompts(cSys.value, cMap.value)">
+          Guardar prompt de {{ company.name }}
+        </button>
+        @if (hasCustomPrompt()) {
+          <button class="btn ghost small" (click)="resetCompanyPrompts()">Volver al prompt por defecto</button>
+        }
+      </div>
+
+      <div class="danger-zone">
+        <input #rename [value]="company.name" />
+        <button class="btn ghost small" (click)="saveCompany({ name: rename.value })">Renombrar grupo</button>
+      </div>
+    }
+
+    @if (error()) { <p class="error">{{ error() }}</p> }
+    @if (success()) { <p class="success">{{ success() }}</p> }
+  </section>
+
+  <!-- ============ chat de grupo abierto ============ -->
+  @if (openChat(); as chat) {
+    <section class="card chat-card">
+      <div class="chat-header">
+        <input #chatName class="inline-edit chat-title" [value]="chat.filename"
+          (keyup.enter)="chatName.blur()" (blur)="renameChat(chat, chatName.value)" />
+        <div style="display:flex;gap:.35rem">
+          @if (chatDetail()?.analysis) {
+            <button class="btn ghost small" (click)="exportAnalysis()">⬇ Exportar</button>
+          }
+          <button class="btn primary small" (click)="analyze()" [disabled]="analyzing() || !chatDetail()">
+            @if (analyzing()) { <span class="spinner"></span> } @else { Analizar IA }
+          </button>
+          <button class="btn ghost small" (click)="closeChat()">Cerrar</button>
+        </div>
+      </div>
+
+      <div class="chat-tabs">
+        <button class="tab" [class.active]="chatMode() === 'chat'" (click)="chatMode.set('chat')">Chat</button>
+        <button class="tab" [class.active]="chatMode() === 'participants'" (click)="chatMode.set('participants')">
+          Participantes
+        </button>
+        <button class="tab" [class.active]="chatMode() === 'analysis'" (click)="chatMode.set('analysis')"
+          [disabled]="!chatDetail()?.analysis && !analyzing()">Análisis</button>
+      </div>
+
+      @if (!chatDetail()) {
+        <p class="list-empty"><span class="spinner dark"></span></p>
+      } @else if (chatMode() === 'chat') {
+        <div class="chat-container">
+          @for (m of messages(); track $index) {
+            @if ($first || messages()[$index - 1].sender !== m.sender) {
+              <div class="bubble-sender" [class.me]="m.side === 'me'">{{ m.sender || 'Sistema' }}</div>
+            }
+            <div class="bubble" [class.me]="m.side === 'me'">
+              <div class="bubble-text">{{ m.content }}</div>
+              <div class="bubble-time">{{ m.time }}</div>
+            </div>
+          } @empty {
+            <div class="chat-fallback">{{ chatDetail()?.raw_text }}</div>
+          }
+        </div>
+      } @else if (chatMode() === 'participants') {
+        <p class="hint">
+          Así se clasificó a cada remitente. Si alguien del cliente aparece como equipo, agrégalo al directorio y vuelve a analizar.
+        </p>
+        <div class="participants">
+          <div>
+            <h3 class="group-h">Cliente ({{ participants().client.length }})</h3>
+            @for (p of participants().client; track p.label) { <span class="chip client">{{ p.label }}</span> }
+          </div>
+          <div>
+            <h3 class="group-h">Nuestro equipo — se evalúa ({{ participants().team.length }})</h3>
+            @for (p of participants().team; track p.label) { <span class="chip team">{{ p.label }}</span> }
+          </div>
+        </div>
+      } @else {
+        @if (analyzing()) {
+          <p class="list-empty"><span class="spinner dark"></span> Analizando grupo…</p>
+        } @else {
+          <div class="analysis-body" [innerHTML]="analysisHtml()"></div>
+        }
+      }
+    </section>
+  }
+}

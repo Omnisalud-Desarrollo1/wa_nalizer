@@ -21,8 +21,9 @@ function extractTime(line: string): string {
   return m ? m[1].trim() : '';
 }
 
-export function parseChat(raw: string, meName: string): Message[] {
-  if (!raw || !meName) return [];
+// isMe decide qué remitentes van a la derecha (asesor en chats 1-1, nuestro equipo en grupos).
+export function parseChat(raw: string, isMe: (sender: string) => boolean): Message[] {
+  if (!raw) return [];
   const lines = raw.split('\n');
   const msgs: Message[] = [];
   let current: { sender: string; time: string; content: string[] } | null = null;
@@ -35,7 +36,7 @@ export function parseChat(raw: string, meName: string): Message[] {
           sender: current.sender,
           time: current.time,
           content,
-          side: current.sender.toLowerCase().includes(meName.toLowerCase()) ? 'me' : 'other',
+          side: current.sender && isMe(current.sender) ? 'me' : 'other',
         });
       }
       current = null;
