@@ -14,6 +14,20 @@ const {
 const chunkChars = Number(CHUNK_CHARS);
 const maxChunks = Number(MAX_CHUNKS);
 
+// Valores que acepta OpenRouter. Se tolera mayúsculas/comillas/espacios (típico al pegarlo en el panel de Render);
+// cualquier otra cosa corta el arranque: en Render un deploy que no arranca no reemplaza al que está corriendo.
+const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+const openRouterEffort = OPENROUTER_REASONING_EFFORT.trim().replace(/^["']|["']$/g, '').trim().toLowerCase();
+if (!REASONING_EFFORTS.includes(openRouterEffort)) {
+  console.error(
+    `OPENROUTER_REASONING_EFFORT inválido: ${JSON.stringify(OPENROUTER_REASONING_EFFORT)}. Usa uno de: ${REASONING_EFFORTS.join(', ')}`,
+  );
+  process.exit(1);
+}
+
+// 4xx (salvo 429) = request mal formado o rechazado: reintentar da el mismo error y solo hace esperar.
+class NonRetryableError extends Error {}
+
 const SYSTEM_PROMPT = `
 Eres un auditor experto en gestión de cartera, recuperación de cartera y cobranza.
 
@@ -224,7 +238,7 @@ async function askChatCompletions(opts: {
         lastErr = new Error(`${label} ${res.status}: ${await res.text().catch(() => '')}`);
         throw lastErr;
       }
-      if (!res.ok) throw new Error(`${label} ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new NonRetryableError(`${label} ${res.status}: ${await res.text()}`);
       const data = await res.json();
       const content = data.choices?.[0]?.message?.content ?? '';
       // usage.prompt_tokens es lo que el proveedor dice haber recibido de verdad: si es mucho
@@ -239,7 +253,7 @@ async function askChatCompletions(opts: {
       return content;
     } catch (e) {
       lastErr = e;
-      if (attempt === maxRetries) break;
+      if (attempt === maxRetries || e instanceof NonRetryableError) break;
       const delay = Math.pow(2, attempt) * 1000;
       console.error(`ask[${label}] attempt ${attempt + 1} failed, retrying in ${delay}ms: ${(e as Error).message}`);
       await new Promise((r) => setTimeout(r, delay));
@@ -257,7 +271,7 @@ function askOpenRouter(system: string, user: string, maxRetries = 3): Promise<st
     system,
     user,
     maxRetries,
-    extraBody: { reasoning: { effort: OPENROUTER_REASONING_EFFORT } },
+    extraBody: { reasoning: { effort: openRouterEffort } },
   });
 }
 
@@ -299,7 +313,7 @@ async function askGemini(system: string, user: string, maxRetries = 2): Promise<
         lastErr = new Error(`Gemini ${res.status}: ${await res.text().catch(() => '')}`);
         throw lastErr;
       }
-      if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new NonRetryableError(`Gemini ${res.status}: ${await res.text()}`);
       const data = await res.json();
       const content = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('') ?? '';
       console.log(
@@ -312,7 +326,7 @@ async function askGemini(system: string, user: string, maxRetries = 2): Promise<
       return content;
     } catch (e) {
       lastErr = e;
-      if (attempt === maxRetries) break;
+      if (attempt === maxRetries || e instanceof NonRetryableError) break;
       const delay = Math.pow(2, attempt) * 1000;
       console.error(`ask[gemini] attempt ${attempt + 1} failed, retrying in ${delay}ms: ${(e as Error).message}`);
       await new Promise((r) => setTimeout(r, delay));
